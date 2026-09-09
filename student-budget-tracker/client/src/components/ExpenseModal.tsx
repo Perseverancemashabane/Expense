@@ -42,7 +42,7 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
       setTitle(expenseToEdit.title);
       setAmount(String(expenseToEdit.amount));
       setCategoryName(expenseToEdit.category_name);
-      setDate(expenseToEdit.date);
+      setDate(expenseToEdit.date ? expenseToEdit.date.slice(0, 10) : new Date().toISOString().slice(0, 10));
       setPaymentMethod(expenseToEdit.payment_method || 'Cash');
       setNotes(expenseToEdit.notes || '');
     } else {

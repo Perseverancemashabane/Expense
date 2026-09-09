@@ -1,4 +1,5 @@
 {
   "buildCommand": "cd student-budget-tracker/client && npm install && npm run build",
-  "outputDirectory": "student-budget-tracker/client/out"
+  "outputDirectory": "student-budget-tracker/client/out",
+  "cleanUrls": true
 }

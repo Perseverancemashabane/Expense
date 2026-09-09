@@ -213,22 +213,25 @@ export const db = {
       name: string;
       student_number: string;
       email: string;
+      phone_number?: string;
       password_pin?: string;
       monthly_allowance?: number;
     }) {
       const allowance = Number(student.monthly_allowance) || 3500.0;
+      const cleanPhone = student.phone_number ? student.phone_number.trim() : null;
       if (pool && isUsingPostgres) {
         const query = `
-          INSERT INTO students (name, student_number, email, password_pin, monthly_allowance, created_at, updated_at)
-          VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+          INSERT INTO students (name, student_number, email, phone_number, password_pin, monthly_allowance, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
           ON CONFLICT (student_number)
-          DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email, password_pin = EXCLUDED.password_pin, monthly_allowance = EXCLUDED.monthly_allowance, updated_at = NOW()
+          DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email, phone_number = COALESCE(EXCLUDED.phone_number, students.phone_number), password_pin = EXCLUDED.password_pin, monthly_allowance = EXCLUDED.monthly_allowance, updated_at = NOW()
           RETURNING *;
         `;
         const res = await pool.query(query, [
           student.name.trim(),
           student.student_number.trim(),
           student.email.trim().toLowerCase(),
+          cleanPhone,
           student.password_pin || '1234',
           allowance,
         ]);
@@ -242,6 +245,7 @@ export const db = {
       if (existing) {
         existing.name = student.name.trim();
         existing.email = student.email.trim().toLowerCase();
+        if (cleanPhone) existing.phone_number = cleanPhone;
         existing.password_pin = student.password_pin || existing.password_pin || '1234';
         existing.monthly_allowance = allowance;
         existing.updated_at = now;
@@ -253,6 +257,7 @@ export const db = {
         name: student.name.trim(),
         student_number: student.student_number.trim(),
         email: student.email.trim().toLowerCase(),
+        phone_number: cleanPhone,
         password_pin: student.password_pin || '1234',
         monthly_allowance: allowance,
         created_at: now,
@@ -282,12 +287,39 @@ export const db = {
       }
       const data = getLocalData();
       if (!data.students) data.students = [];
-      return data.students.find((s: any) => s.email.toLowerCase() === clean) || null;
+      return data.students.find((s: any) => s.email && s.email.toLowerCase() === clean) || null;
+    },
+
+    async findByPhone(phone: string) {
+      const rawDigits = phone.replace(/\D/g, '');
+      if (!rawDigits) return null;
+
+      // Also get alternative South African formats
+      const localFormat = rawDigits.startsWith('27') ? '0' + rawDigits.slice(2) : rawDigits;
+      const intlFormat = rawDigits.startsWith('0') ? '27' + rawDigits.slice(1) : rawDigits;
+
+      if (pool && isUsingPostgres) {
+        const query = `
+          SELECT * FROM students 
+          WHERE regexp_replace(phone_number, '[^0-9]', '', 'g') IN ($1, $2, $3)
+          LIMIT 1
+        `;
+        const res = await pool.query(query, [rawDigits, localFormat, intlFormat]);
+        return res.rows[0] || null;
+      }
+
+      const data = getLocalData();
+      if (!data.students) data.students = [];
+      return data.students.find((s: any) => {
+        if (!s.phone_number) return false;
+        const sDigits = String(s.phone_number).replace(/\D/g, '');
+        return sDigits === rawDigits || sDigits === localFormat || sDigits === intlFormat;
+      }) || null;
     },
 
     async getAll() {
       if (pool && isUsingPostgres) {
-        const res = await pool.query('SELECT id, name, student_number, email, monthly_allowance, created_at FROM students ORDER BY id ASC');
+        const res = await pool.query('SELECT id, name, student_number, email, phone_number, monthly_allowance, created_at FROM students ORDER BY id ASC');
         return res.rows;
       }
       const data = getLocalData();

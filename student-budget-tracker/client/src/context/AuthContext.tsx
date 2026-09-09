@@ -20,18 +20,21 @@ interface AuthContextType {
     name: string;
     studentNumber: string;
     email: string;
+    phoneNumber?: string;
     pinOrPassword?: string;
     monthlyAllowance?: number;
   }) => Promise<{ success: boolean; error?: string }>;
   requestPasswordReset: (
     identifier: string,
-    deliveryMethod?: 'email' | 'sms'
+    deliveryMethod?: string
   ) => Promise<{
     success: boolean;
     message?: string;
     error?: string;
     token?: string;
     resetLink?: string;
+    whatsappLink?: string;
+    phoneNumber?: string;
     maskedContact?: string;
     studentNumber?: string;
   }>;
@@ -147,6 +150,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     name: string;
     studentNumber: string;
     email: string;
+    phoneNumber?: string;
     pinOrPassword?: string;
     monthlyAllowance?: number;
   }): Promise<{ success: boolean; error?: string }> => {
@@ -168,6 +172,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       name: data.name.trim(),
       studentNumber: data.studentNumber.trim(),
       email: data.email.trim() || `${data.studentNumber.trim()}@tut4life.ac.za`,
+      phoneNumber: data.phoneNumber ? data.phoneNumber.trim() : '',
       institution: 'Tshwane University of Technology',
       department: 'Computer Systems Engineering',
       monthlyAllowance: data.monthlyAllowance || 3500,
@@ -181,6 +186,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         name: data.name,
         studentNumber: data.studentNumber,
         email: data.email,
+        phoneNumber: data.phoneNumber,
         pin: data.pinOrPassword.trim(),
         monthlyAllowance: data.monthlyAllowance,
       });
@@ -228,7 +234,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const requestPasswordReset = async (
     identifier: string,
-    deliveryMethod: 'email' | 'sms' = 'email'
+    deliveryMethod: string = 'whatsapp'
   ) => {
     try {
       const res = await apiRequestPasswordReset(identifier, deliveryMethod);

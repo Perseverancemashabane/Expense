@@ -91,6 +91,7 @@ export interface StudentUser {
   name: string;
   studentNumber: string;
   email: string;
+  phoneNumber?: string;
   institution: string;
   department: string;
   monthlyAllowance?: number;

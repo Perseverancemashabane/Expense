@@ -18,6 +18,8 @@ import {
   AlertCircle,
   Sparkles,
   Send,
+  Phone,
+  ExternalLink,
 } from 'lucide-react';
 
 function LoginContent() {
@@ -43,6 +45,7 @@ function LoginContent() {
   // Registration state
   const [regName, setRegName] = useState('');
   const [regStudentNumber, setRegStudentNumber] = useState('');
+  const [regPhone, setRegPhone] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPin, setRegPin] = useState('');
   const [regConfirmPin, setRegConfirmPin] = useState('');
@@ -51,11 +54,12 @@ function LoginContent() {
 
   // Forgot Password state
   const [forgotId, setForgotId] = useState('');
-  const [deliveryMethod, setDeliveryMethod] = useState<'email' | 'sms'>('email');
   const [forgotResult, setForgotResult] = useState<{
     message?: string;
     token?: string;
     resetLink?: string;
+    whatsappLink?: string;
+    phoneNumber?: string;
     maskedContact?: string;
     studentNumber?: string;
   } | null>(null);
@@ -173,6 +177,7 @@ function LoginContent() {
         name: regName.trim(),
         studentNumber: regStudentNumber.trim(),
         email: regEmail.trim(),
+        phoneNumber: regPhone.trim(),
         pinOrPassword: regPin.trim(),
         monthlyAllowance: parseFloat(regAllowance) || 3500,
       });
@@ -196,20 +201,22 @@ function LoginContent() {
     setForgotResult(null);
 
     if (!forgotId.trim()) {
-      setError('Please provide your TUT student number or university email.');
+      setError('Please provide your TUT student number, email, or WhatsApp number.');
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      const res = await requestPasswordReset(forgotId.trim(), deliveryMethod);
+      const res = await requestPasswordReset(forgotId.trim(), 'whatsapp');
       if (res.success) {
-        setSuccessMsg(res.message || 'Password reset link dispatched successfully!');
+        setSuccessMsg(res.message || 'Password reset link prepared for WhatsApp!');
         setForgotResult({
           message: res.message,
           token: res.token,
           resetLink: res.resetLink,
+          whatsappLink: res.whatsappLink,
+          phoneNumber: res.phoneNumber,
           maskedContact: res.maskedContact,
           studentNumber: res.studentNumber,
         });
@@ -219,11 +226,16 @@ function LoginContent() {
         if (res.token) {
           setResetToken(res.token);
         }
+        if (res.whatsappLink) {
+          try {
+            window.open(res.whatsappLink, '_blank');
+          } catch {}
+        }
       } else {
         setError(res.error || 'Could not find account. Please verify details.');
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to dispatch reset link.');
+      setError(err.message || 'Failed to dispatch WhatsApp reset link.');
     } finally {
       setIsSubmitting(false);
     }
@@ -417,7 +429,7 @@ function LoginContent() {
                   htmlFor="student-identifier"
                   className="block text-xs font-semibold text-slate-300 mb-1"
                 >
-                  Student Number or Email
+                  Student Number, Email, or WhatsApp Number
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
@@ -429,7 +441,7 @@ function LoginContent() {
                     type="text"
                     autoComplete="username"
                     required
-                    placeholder="e.g. 230099774 or email"
+                    placeholder="e.g. 230099774, email, or 082 123 4567"
                     value={identifier}
                     onChange={(e) => setIdentifier(e.target.value)}
                     className="w-full pl-9 pr-4 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
@@ -564,6 +576,31 @@ function LoginContent() {
               </div>
 
               <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label
+                    htmlFor="reg-phone"
+                    className="block text-xs font-semibold text-slate-300 flex items-center gap-1.5"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>WhatsApp / Phone Number</span>
+                  </label>
+                  <span className="text-3xs text-emerald-400 font-medium">Used for Password Reset</span>
+                </div>
+                <input
+                  id="reg-phone"
+                  type="tel"
+                  autoComplete="tel"
+                  placeholder="e.g. 082 123 4567 or +27 82 123 4567"
+                  value={regPhone}
+                  onChange={(e) => setRegPhone(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                />
+                <p className="text-3xs text-slate-400 mt-1">
+                  You can use your WhatsApp number to log in and receive instant password reset links.
+                </p>
+              </div>
+
+              <div>
                 <label
                   htmlFor="reg-email"
                   className="block text-xs font-semibold text-slate-300 mb-1"
@@ -673,16 +710,16 @@ function LoginContent() {
             </form>
           )}
 
-          {/* Tab 3: Forgotten Password / Request Reset Link Form */}
+          {/* Tab 3: Forgotten Password / Request Reset Link Form (WhatsApp) */}
           {tab === 'forgot' && (
             <div className="space-y-4">
               <div>
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <KeyRound className="w-4 h-4 text-emerald-400" />
-                  Reset Student Password
+                  <MessageSquare className="w-4 h-4 text-emerald-400" />
+                  Reset Password via WhatsApp
                 </h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  Enter your registered student number or university email. We will generate an encrypted reset token and dispatch a reset link.
+                  Enter your registered Student Number, Email, or WhatsApp Number. We will generate your secure reset link and send it directly to your WhatsApp.
                 </p>
               </div>
 
@@ -692,7 +729,7 @@ function LoginContent() {
                     htmlFor="forgot-id"
                     className="block text-xs font-semibold text-slate-300 mb-1"
                   >
-                    TUT Student Number or Email
+                    Student Number, Email, or WhatsApp Number
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
@@ -702,7 +739,7 @@ function LoginContent() {
                       id="forgot-id"
                       type="text"
                       required
-                      placeholder="e.g. 230099774 or student@tut4life.ac.za"
+                      placeholder="e.g. 082 123 4567, 230099774, or email"
                       value={forgotId}
                       onChange={(e) => setForgotId(e.target.value)}
                       className="w-full pl-9 pr-4 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
@@ -710,36 +747,11 @@ function LoginContent() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    Notification Dispatch Method
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setDeliveryMethod('email')}
-                      className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl border text-xs font-semibold transition cursor-pointer ${
-                        deliveryMethod === 'email'
-                          ? 'bg-emerald-600/30 border-emerald-500 text-emerald-300 shadow-sm'
-                          : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:text-slate-200'
-                      }`}
-                    >
-                      <Mail className="w-3.5 h-3.5" />
-                      <span>University Email</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDeliveryMethod('sms')}
-                      className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl border text-xs font-semibold transition cursor-pointer ${
-                        deliveryMethod === 'sms'
-                          ? 'bg-emerald-600/30 border-emerald-500 text-emerald-300 shadow-sm'
-                          : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:text-slate-200'
-                      }`}
-                    >
-                      <MessageSquare className="w-3.5 h-3.5" />
-                      <span>Registered SMS</span>
-                    </button>
-                  </div>
+                <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2.5">
+                  <MessageSquare className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>
+                    Your reset link will be sent to your registered WhatsApp number for instant 1-tap recovery.
+                  </span>
                 </div>
 
                 <button
@@ -748,33 +760,47 @@ function LoginContent() {
                   className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-md transition active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {isSubmitting ? (
-                    <span>Dispatching Reset Link...</span>
+                    <span>Preparing WhatsApp Link...</span>
                   ) : (
                     <>
-                      <Send className="w-4 h-4" />
-                      <span>Send Reset Link & Code</span>
+                      <MessageSquare className="w-4 h-4" />
+                      <span>Send Reset Link to WhatsApp</span>
                     </>
                   )}
                 </button>
               </form>
 
-              {/* If Reset Code was Generated and Dispatched */}
+              {/* If Reset Code was Generated and Dispatched via WhatsApp */}
               {forgotResult && (
-                <div className="mt-4 p-4 rounded-2xl bg-emerald-950/70 border border-emerald-500/40 space-y-3">
+                <div className="mt-4 p-4 rounded-2xl bg-emerald-950/70 border border-emerald-500/40 space-y-3 animate-in fade-in duration-200">
                   <div className="flex items-center gap-2 text-emerald-300 font-bold text-xs">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                    <span>Reset Notification Dispatched</span>
+                    <span>WhatsApp Reset Link Ready</span>
                   </div>
                   <p className="text-2xs text-slate-300 leading-relaxed">
-                    A reset verification request was processed for{' '}
+                    Reset link generated for WhatsApp number{' '}
                     <strong className="text-white">{forgotResult.maskedContact}</strong>.
                   </p>
+
+                  {forgotResult.whatsappLink && (
+                    <a
+                      href={forgotResult.whatsappLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-2.5 px-4 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-bold shadow-md flex items-center justify-center gap-2 transition active:scale-[0.99]"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      <span>Open WhatsApp to Receive Link</span>
+                      <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+                    </a>
+                  )}
+
                   {forgotResult.token && (
-                    <div className="space-y-2">
+                    <div className="space-y-2 pt-1">
                       <div className="flex items-center justify-between p-3 rounded-xl bg-slate-900/90 border border-slate-700">
                         <div>
                           <span className="text-3xs uppercase tracking-wider text-slate-400 font-bold block">
-                            6-Digit Verification Code
+                            6-Digit Reset Code
                           </span>
                           <span className="text-lg font-mono font-black text-emerald-400 tracking-widest">
                             {forgotResult.token}
@@ -793,7 +819,7 @@ function LoginContent() {
                         </button>
                       </div>
                       <p className="text-3xs text-slate-400 leading-normal">
-                        💡 <em>Tip: To deliver automated emails directly into your external Gmail/Outlook inbox, configure SMTP credentials on your server. You can click &quot;Enter Code Now&quot; above to set your new password immediately!</em>
+                        💡 <em>Tip: You can click &quot;Open WhatsApp to Receive Link&quot; above to open the message, or click &quot;Enter Code Now&quot; to set your new password directly on this screen.</em>
                       </p>
                     </div>
                   )}

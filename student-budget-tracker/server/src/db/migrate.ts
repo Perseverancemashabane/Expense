@@ -23,6 +23,7 @@ export async function runMigration() {
           name VARCHAR(150) NOT NULL,
           student_number VARCHAR(50) UNIQUE NOT NULL,
           email VARCHAR(150) UNIQUE NOT NULL,
+          phone_number VARCHAR(50),
           password_pin VARCHAR(255),
           monthly_allowance NUMERIC(12, 2) DEFAULT 3500.00,
           reset_token VARCHAR(255),
@@ -32,17 +33,18 @@ export async function runMigration() {
         );
       `);
 
-      // Ensure reset columns exist if table was already created
+      // Ensure reset columns and phone_number exist if table was already created
       await client.query(`
+        ALTER TABLE students ADD COLUMN IF NOT EXISTS phone_number VARCHAR(50);
         ALTER TABLE students ADD COLUMN IF NOT EXISTS reset_token VARCHAR(255);
         ALTER TABLE students ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMPTZ;
       `);
 
       // Seed Default Student (Naledi Mashabane)
       await client.query(`
-        INSERT INTO students (name, student_number, email, password_pin, monthly_allowance)
-        VALUES ('Naledi Perseverance Mashabane', '230099774', '230099774@tut4life.ac.za', '1234', 3500.00)
-        ON CONFLICT (student_number) DO NOTHING;
+        INSERT INTO students (name, student_number, email, phone_number, password_pin, monthly_allowance)
+        VALUES ('Naledi Perseverance Mashabane', '230099774', '230099774@tut4life.ac.za', '0710000000', '1234', 3500.00)
+        ON CONFLICT (student_number) DO UPDATE SET phone_number = COALESCE(students.phone_number, '0710000000');
       `);
 
       // 2. Budgets Table

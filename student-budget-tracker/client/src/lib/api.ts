@@ -553,6 +553,7 @@ export async function registerStudentAccount(data: {
   name: string;
   studentNumber: string;
   email?: string;
+  phoneNumber?: string;
   pin?: string;
   monthlyAllowance?: number;
 }) {
@@ -564,6 +565,7 @@ export async function registerStudentAccount(data: {
         name: data.name,
         studentNumber: data.studentNumber,
         email: data.email,
+        phoneNumber: data.phoneNumber,
         password: data.pin || '1234',
         monthlyAllowance: data.monthlyAllowance || 3500,
       }),
@@ -578,7 +580,7 @@ export async function registerStudentAccount(data: {
   }
 }
 
-export async function requestPasswordReset(identifier: string, deliveryMethod: 'email' | 'sms' = 'email') {
+export async function requestPasswordReset(identifier: string, deliveryMethod: string = 'whatsapp') {
   try {
     const res = await safeFetch(`${API_BASE}/auth/forgot-password`, {
       method: 'POST',
@@ -597,7 +599,7 @@ export async function requestPasswordReset(identifier: string, deliveryMethod: '
     if (isTimeout) {
       return {
         success: false,
-        error: 'The server was waking up from sleep. Please click "Send Reset Link & Code" once more.',
+        error: 'The server was waking up from sleep. Please click "Send WhatsApp Reset Link" once more.',
       };
     }
     return { success: false, error: err.message || 'Server unreachable' };

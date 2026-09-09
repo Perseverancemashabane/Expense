@@ -56,6 +56,7 @@ export const authController = {
           name: student.name,
           studentNumber: student.student_number,
           email: student.email,
+          phoneNumber: student.phone_number || '',
           institution: 'Tshwane University of Technology',
           department: 'Computer Systems Engineering',
           monthlyAllowance: Number(student.monthly_allowance) || 3500,
@@ -70,10 +71,48 @@ export const authController = {
         });
       }
 
+      // Check by phone number if not found by student_number or email
+      if (!student) {
+        student = await db.students.findByPhone(cleanId);
+        if (student) {
+          const expectedPin = String(student.password_pin || '1234').trim();
+          if (enteredPassword !== expectedPin) {
+            return res.status(401).json({ success: false, error: 'Incorrect password or PIN. Please try again.' });
+          }
+
+          const initials = String(student.name)
+            .split(' ')
+            .map((p: string) => p[0])
+            .join('')
+            .slice(0, 2)
+            .toUpperCase() || 'ST';
+
+          const user = {
+            id: `tut-${student.student_number}`,
+            name: student.name,
+            studentNumber: student.student_number,
+            email: student.email,
+            phoneNumber: student.phone_number || '',
+            institution: 'Tshwane University of Technology',
+            department: 'Computer Systems Engineering',
+            monthlyAllowance: Number(student.monthly_allowance) || 3500,
+            avatarInitials: initials,
+          };
+
+          return res.json({
+            success: true,
+            message: 'Student authenticated successfully',
+            user,
+            token: `tut-token-${student.student_number}`,
+          });
+        }
+      }
+
       // 2. Demo Student fallback for Naledi Mashabane (230099774)
       if (
         cleanIdLower === '230099774' ||
         cleanIdLower === 'naledimashabane001@gmail.com' ||
+        cleanIdLower === '0710000000' ||
         cleanIdLower.includes('230099774') ||
         cleanIdLower === 'admin'
       ) {
@@ -86,6 +125,7 @@ export const authController = {
           name: DEMO_STUDENT.name,
           student_number: DEMO_STUDENT.studentNumber,
           email: DEMO_STUDENT.email,
+          phone_number: '0710000000',
           password_pin: '1234',
           monthly_allowance: 3500,
         });
@@ -93,7 +133,7 @@ export const authController = {
         return res.json({
           success: true,
           message: 'Student authenticated successfully',
-          user: DEMO_STUDENT,
+          user: { ...DEMO_STUDENT, phoneNumber: '0710000000' },
           token: 'tut-session-token-demo',
         });
       }
@@ -112,7 +152,7 @@ export const authController = {
   // POST /api/auth/register
   async register(req: Request, res: Response) {
     try {
-      const { name, studentNumber, email, password, monthlyAllowance } = req.body;
+      const { name, studentNumber, email, phone, phoneNumber, password, monthlyAllowance } = req.body;
       if (!name || !studentNumber) {
         return res.status(400).json({ success: false, error: 'Full name and student number are required' });
       }
@@ -124,10 +164,11 @@ export const authController = {
 
       const cleanNum = String(studentNumber).trim();
       const cleanEmail = email ? String(email).trim().toLowerCase() : `${cleanNum}@tut4life.ac.za`;
+      const cleanPhone = (phoneNumber || phone) ? String(phoneNumber || phone).trim() : '';
       const cleanName = String(name).trim();
       const allowance = Number(monthlyAllowance) || 3500;
 
-      // 0. Verify if account already exists for student number or email
+      // 0. Verify if account already exists for student number or email or phone
       const existingByNumber = await db.students.findByStudentNumber(cleanNum);
       if (existingByNumber) {
         return res.status(409).json({
@@ -144,11 +185,22 @@ export const authController = {
         });
       }
 
-      // 1. Create student in database with student's custom password
+      if (cleanPhone) {
+        const existingByPhone = await db.students.findByPhone(cleanPhone);
+        if (existingByPhone) {
+          return res.status(409).json({
+            success: false,
+            error: `An account with phone/WhatsApp number "${cleanPhone}" already exists. Please sign in or use "Forgot Password".`,
+          });
+        }
+      }
+
+      // 1. Create student in database with student's custom password and phone
       const student = await db.students.create({
         name: cleanName,
         student_number: cleanNum,
         email: cleanEmail,
+        phone_number: cleanPhone,
         password_pin: cleanPassword,
         monthly_allowance: allowance,
       });
@@ -168,6 +220,7 @@ export const authController = {
         name: student.name,
         studentNumber: student.student_number,
         email: student.email,
+        phoneNumber: student.phone_number || cleanPhone,
         institution: 'Tshwane University of Technology',
         department: 'Computer Systems Engineering',
         monthlyAllowance: Number(student.monthly_allowance) || allowance,
@@ -189,9 +242,9 @@ export const authController = {
   // POST /api/auth/forgot-password
   async forgotPassword(req: Request, res: Response) {
     try {
-      const { identifier, deliveryMethod } = req.body;
+      const { identifier } = req.body;
       if (!identifier) {
-        return res.status(400).json({ success: false, error: 'Student number or email is required' });
+        return res.status(400).json({ success: false, error: 'Student number, email, or WhatsApp number is required' });
       }
 
       const cleanId = String(identifier).trim();
@@ -201,13 +254,17 @@ export const authController = {
       if (!student && cleanIdLower.includes('@')) {
         student = await db.students.findByEmail(cleanIdLower);
       }
+      if (!student) {
+        student = await db.students.findByPhone(cleanId);
+      }
 
       // If demo student Naledi and not yet saved in DB
-      if (!student && (cleanIdLower === '230099774' || cleanIdLower.includes('230099774') || cleanIdLower === 'naledimashabane001@gmail.com')) {
+      if (!student && (cleanIdLower === '230099774' || cleanIdLower.includes('230099774') || cleanIdLower === 'naledimashabane001@gmail.com' || cleanIdLower === '0710000000')) {
         student = await db.students.create({
           name: DEMO_STUDENT.name,
           student_number: DEMO_STUDENT.studentNumber,
           email: DEMO_STUDENT.email,
+          phone_number: '0710000000',
           password_pin: '1234',
           monthly_allowance: 3500,
         });
@@ -216,7 +273,7 @@ export const authController = {
       if (!student) {
         return res.status(404).json({
           success: false,
-          error: `No student account found for "${cleanId}". Please verify your details or register a new account.`,
+          error: `No account found for "${cleanId}". Please verify your student number, email, or phone number.`,
         });
       }
 
@@ -226,15 +283,7 @@ export const authController = {
 
       await db.students.saveResetToken(student.student_number, resetCode, expiresAt);
 
-      // Mask contact information for security
-      const rawEmail = student.email || `${student.student_number}@tut4life.ac.za`;
-      const [uName, domain] = rawEmail.split('@');
-      const maskedEmail = uName.length <= 3 ? `${uName[0]}***@${domain}` : `${uName.slice(0, 2)}***${uName.slice(-1)}@${domain}`;
-      const maskedPhone = `+27 7* *** ${student.student_number.slice(-4)}`;
-      const masked = deliveryMethod === 'sms' ? maskedPhone : maskedEmail;
-      const deliveryLabel = deliveryMethod === 'sms' ? 'SMS' : 'University Email';
-
-      // Full reset URL for direct email clicks
+      // Full reset URL for direct WhatsApp clicks
       const clientBase =
         process.env.CLIENT_URL && !process.env.CLIENT_URL.includes('localhost')
           ? process.env.CLIENT_URL
@@ -244,35 +293,31 @@ export const authController = {
 
       const fullResetLink = `${clientBase.replace(/\/$/, '')}/login?mode=reset&token=${resetCode}&student=${student.student_number}`;
 
-      // Dispatch real email via emailService with a 2.5s race limit so user response is always immediate
-      let emailDispatchResult: { sent: boolean; message?: string; error?: string } = { sent: false };
-      if (deliveryMethod !== 'sms') {
-        const emailPromise = sendPasswordResetEmail({
-          to: rawEmail,
-          studentName: student.name,
-          studentNumber: student.student_number,
-          resetCode,
-          resetLink: fullResetLink,
-        });
+      // Build WhatsApp Link
+      const studentPhone = (student.phone_number || '').trim();
+      const rawDigits = studentPhone.replace(/\D/g, '');
+      const intlWaNumber = rawDigits.startsWith('0')
+        ? '27' + rawDigits.slice(1)
+        : (rawDigits.startsWith('27') ? rawDigits : (rawDigits ? '27' + rawDigits : ''));
 
-        const quickTimeout = new Promise<{ sent: boolean; message: string }>((resolve) =>
-          setTimeout(() => resolve({ sent: false, message: 'Email dispatch initiated in background' }), 2500)
-        );
+      const waText = `Hello ${student.name}! 🎓\n\nHere is your password reset link for the TUT Student Budget Tracker:\n🔗 ${fullResetLink}\n\nYour 6-digit verification code is: *${resetCode}*\n\n(Valid for 60 minutes)`;
 
-        emailDispatchResult = await Promise.race([emailPromise, quickTimeout]);
-      }
+      const whatsappLink = intlWaNumber
+        ? `https://wa.me/${intlWaNumber}?text=${encodeURIComponent(waText)}`
+        : `https://wa.me/?text=${encodeURIComponent(waText)}`;
 
-      const dispatchMsg = emailDispatchResult.sent
-        ? `Password reset link successfully sent to your email (${masked})! Please check your inbox and spam folder.`
-        : `Password reset code (${resetCode}) generated for ${masked}! Click the button below to reset immediately, or configure SMTP credentials in server/.env for automated inbox delivery.`;
+      // Mask phone number for security
+      const maskedPhone = studentPhone.length >= 10
+        ? `${studentPhone.slice(0, 3)} *** ${studentPhone.slice(-4)}`
+        : (studentPhone || 'Registered WhatsApp Number');
 
       return res.json({
         success: true,
-        message: dispatchMsg,
-        emailSent: emailDispatchResult.sent,
-        studentNumber: student.student_number,
-        maskedContact: masked,
-        deliveryMethod: deliveryMethod || 'email',
+        message: `Password reset link prepared for WhatsApp (${maskedPhone})! Click below to open WhatsApp.`,
+        whatsappLink,
+        phoneNumber: studentPhone,
+        maskedContact: maskedPhone,
+        deliveryMethod: 'whatsapp',
         token: resetCode,
         resetLink: fullResetLink,
         expiresIn: '60 minutes',
@@ -344,6 +389,7 @@ export const authController = {
             name: student.name,
             studentNumber: student.student_number,
             email: student.email,
+            phoneNumber: student.phone_number || '',
             institution: 'Tshwane University of Technology',
             department: 'Computer Systems Engineering',
             monthlyAllowance: Number(student.monthly_allowance) || 3500,
@@ -354,7 +400,7 @@ export const authController = {
 
       return res.json({
         success: true,
-        user: DEMO_STUDENT,
+        user: { ...DEMO_STUDENT, phoneNumber: '0710000000' },
       });
     } catch (err: any) {
       return res.json({ success: true, user: DEMO_STUDENT });

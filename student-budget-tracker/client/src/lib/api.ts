@@ -1,6 +1,7 @@
 import { BudgetSummary, CategorySummary, Expense, AnalyticsSummary } from '../types';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL || 'https://expense-31tf.onrender.com/api';
 
 // Initial student demo data for resilient offline / mobile fallback
 const INITIAL_DEMO_DATA = {

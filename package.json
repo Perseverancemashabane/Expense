@@ -8,4 +8,3 @@
     "seed": "npm run seed --prefix student-budget-tracker"
   }
 }
-

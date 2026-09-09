@@ -11,9 +11,9 @@
     "dev": "node run-dev.js",
     "dev:server": "npm run dev --prefix server",
     "dev:client": "npm run dev --prefix client",
-    "build:server": "npm run build --prefix server",
-    "build:client": "npm run build --prefix client",
-    "build": "npm run build --prefix server && npm run build --prefix client",
+    "build:server": "npm --prefix server install && npm --prefix server run build",
+    "build:client": "npm --prefix client install && npm --prefix client run build",
+    "build": "node -e \"if (process.env.VERCEL) { require('child_process').execSync('npm --prefix client install && npm --prefix client run build', {stdio:'inherit'}); } else { require('child_process').execSync('npm --prefix server install && npm --prefix server run build && npm --prefix client install && npm --prefix client run build', {stdio:'inherit'}); }\"",
     "seed": "npm run seed --prefix server",
     "migrate": "npm run migrate --prefix server"
   },
@@ -29,4 +29,3 @@
   "author": "Naledi Perseverance Mashabane (TUT)",
   "license": "MIT"
 }
-

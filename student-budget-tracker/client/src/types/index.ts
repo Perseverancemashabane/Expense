@@ -86,3 +86,15 @@ export interface AnalyticsSummary {
   recentExpenses: Expense[];
 }
 
+export interface StudentUser {
+  id: number | string;
+  name: string;
+  studentNumber: string;
+  email: string;
+  institution: string;
+  department: string;
+  monthlyAllowance?: number;
+  avatarInitials?: string;
+  token?: string;
+}
+

@@ -7,6 +7,7 @@ import budgetRoutes from './routes/budgetRoutes';
 import expenseRoutes from './routes/expenseRoutes';
 import categoryRoutes from './routes/categoryRoutes';
 import analyticsRoutes from './routes/analyticsRoutes';
+import authRoutes from './routes/authRoutes';
 import { db } from './config/db';
 
 dotenv.config();
@@ -39,6 +40,7 @@ app.get('/api/health', async (req: Request, res: Response) => {
 });
 
 // API Routes
+app.use('/api/auth', authRoutes);
 app.use('/api/budget', budgetRoutes);
 app.use('/api/expenses', expenseRoutes);
 app.use('/api/categories', categoryRoutes);

@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '../context/AuthContext';
 import { Navbar } from '../components/Navbar';
 import { BudgetSummaryCards } from '../components/BudgetSummaryCards';
 import { CategoryBreakdown } from '../components/CategoryBreakdown';
@@ -23,6 +25,9 @@ import { BudgetSummary, CategorySummary, Expense, AnalyticsSummary } from '../ty
 import { CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
 
 export default function DashboardPage() {
+  const router = useRouter();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+
   const [currentMonth, setCurrentMonth] = useState('2026-09');
   const [budgetSummary, setBudgetSummary] = useState<BudgetSummary | null>(null);
   const [categories, setCategories] = useState<CategorySummary[]>([]);
@@ -91,9 +96,18 @@ export default function DashboardPage() {
     }
   }, [currentMonth, selectedCategory, searchQuery, startDate, endDate, sortBy, sortOrder]);
 
+  // Route guard: Redirect unauthenticated students to /login
   useEffect(() => {
-    loadDashboardData();
-  }, [loadDashboardData]);
+    if (!authLoading && !isAuthenticated) {
+      router.push('/login');
+    }
+  }, [isAuthenticated, authLoading, router]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadDashboardData();
+    }
+  }, [loadDashboardData, isAuthenticated]);
 
   // Handle Create or Update Expense
   const handleSaveExpense = async (data: {
@@ -166,6 +180,19 @@ export default function DashboardPage() {
     }
   };
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">
+        <div className="flex flex-col items-center gap-3">
+          <RefreshCw className="w-8 h-8 text-emerald-500 animate-spin" />
+          <p className="text-xs font-semibold tracking-wide text-slate-300">
+            Checking TUT Student Portal Session...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50/50 flex flex-col text-slate-900">
       {/* Toast Notification */}
@@ -212,6 +239,11 @@ export default function DashboardPage() {
           <div>
             <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
               Student Financial Overview
+              {user ? (
+                <span className="text-base sm:text-lg font-bold text-emerald-600 ml-2">
+                  • Welcome, {user.name.split(' ')[0]}
+                </span>
+              ) : null}
             </h2>
             <p className="text-xs sm:text-sm text-slate-500">
               Allowance management & expense tracking for university students • Month of{' '}

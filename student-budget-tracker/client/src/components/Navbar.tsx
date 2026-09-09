@@ -1,7 +1,9 @@
 'use client';
 
 import React from 'react';
-import { Wallet, PlusCircle, SlidersHorizontal, RotateCcw, User } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Wallet, PlusCircle, SlidersHorizontal, RotateCcw, User, LogOut } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 interface NavbarProps {
   currentMonth: string;
@@ -20,6 +22,16 @@ export const Navbar: React.FC<NavbarProps> = ({
   onResetDemo,
   isResetting,
 }) => {
+  const router = useRouter();
+  const { user, logout } = useAuth();
+
+  const handleSignOut = () => {
+    if (window.confirm('Sign out of the TUT Student Budget Portal?')) {
+      logout();
+      router.push('/login');
+    }
+  };
+
   return (
     <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5">
@@ -27,8 +39,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Logo & Student Identity */}
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm">
-                <Wallet className="w-5 h-5" />
+              <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm font-black text-sm">
+                {user?.avatarInitials || <Wallet className="w-5 h-5" />}
               </div>
               <div>
                 <h1 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
@@ -39,7 +51,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </h1>
                 <div className="flex items-center gap-2 text-xs text-slate-500">
                   <User className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Naledi M. • TUT Computer Systems Eng.</span>
+                  <span>
+                    {user ? `${user.name} (${user.studentNumber})` : 'Naledi M. • TUT Computer Systems Eng.'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -92,6 +106,16 @@ export const Navbar: React.FC<NavbarProps> = ({
               title="Reset to default sample student expenses"
             >
               <RotateCcw className={`w-4 h-4 ${isResetting ? 'animate-spin text-emerald-600' : ''}`} />
+            </button>
+
+            {/* Sign Out Button */}
+            <button
+              onClick={handleSignOut}
+              className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs sm:text-sm font-medium text-slate-600 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 transition"
+              title="Sign out of student portal"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline">Sign Out</span>
             </button>
           </div>
         </div>

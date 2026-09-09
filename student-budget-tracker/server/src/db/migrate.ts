@@ -25,9 +25,17 @@ export async function runMigration() {
           email VARCHAR(150) UNIQUE NOT NULL,
           password_pin VARCHAR(255),
           monthly_allowance NUMERIC(12, 2) DEFAULT 3500.00,
+          reset_token VARCHAR(255),
+          reset_token_expires TIMESTAMPTZ,
           created_at TIMESTAMPTZ DEFAULT NOW(),
           updated_at TIMESTAMPTZ DEFAULT NOW()
         );
+      `);
+
+      // Ensure reset columns exist if table was already created
+      await client.query(`
+        ALTER TABLE students ADD COLUMN IF NOT EXISTS reset_token VARCHAR(255);
+        ALTER TABLE students ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMPTZ;
       `);
 
       // Seed Default Student (Naledi Mashabane)

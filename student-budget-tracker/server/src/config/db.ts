@@ -293,6 +293,72 @@ export const db = {
       const data = getLocalData();
       return data.students || [];
     },
+
+    async saveResetToken(studentNumber: string, token: string, expiresAt: Date) {
+      const clean = studentNumber.trim();
+      if (pool && isUsingPostgres) {
+        const res = await pool.query(
+          'UPDATE students SET reset_token = $1, reset_token_expires = $2, updated_at = NOW() WHERE student_number = $3 RETURNING *',
+          [token, expiresAt, clean]
+        );
+        return res.rows[0] || null;
+      }
+      const data = getLocalData();
+      if (!data.students) data.students = [];
+      const student = data.students.find((s: any) => s.student_number === clean);
+      if (student) {
+        student.reset_token = token;
+        student.reset_token_expires = expiresAt.toISOString();
+        saveLocalData(data);
+        return student;
+      }
+      return null;
+    },
+
+    async verifyResetToken(studentNumber: string, token: string) {
+      const clean = studentNumber.trim();
+      const cleanToken = token.trim();
+      if (pool && isUsingPostgres) {
+        const res = await pool.query(
+          'SELECT * FROM students WHERE student_number = $1 AND reset_token = $2 AND reset_token_expires > NOW()',
+          [clean, cleanToken]
+        );
+        return res.rows[0] || null;
+      }
+      const data = getLocalData();
+      if (!data.students) data.students = [];
+      const student = data.students.find(
+        (s: any) => s.student_number === clean && s.reset_token === cleanToken
+      );
+      if (student && student.reset_token_expires && new Date(student.reset_token_expires) > new Date()) {
+        return student;
+      }
+      return null;
+    },
+
+    async resetPassword(studentNumber: string, newPasswordPin: string) {
+      const clean = studentNumber.trim();
+      const newPin = newPasswordPin.trim();
+      if (pool && isUsingPostgres) {
+        const res = await pool.query(
+          'UPDATE students SET password_pin = $1, reset_token = NULL, reset_token_expires = NULL, updated_at = NOW() WHERE student_number = $2 RETURNING *',
+          [newPin, clean]
+        );
+        return res.rows[0] || null;
+      }
+      const data = getLocalData();
+      if (!data.students) data.students = [];
+      const student = data.students.find((s: any) => s.student_number === clean);
+      if (student) {
+        student.password_pin = newPin;
+        delete student.reset_token;
+        delete student.reset_token_expires;
+        student.updated_at = new Date().toISOString();
+        saveLocalData(data);
+        return student;
+      }
+      return null;
+    },
   },
 
   // Storage Repository for Budgets (Isolated per student)

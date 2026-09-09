@@ -3,7 +3,12 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { StudentUser } from '../types';
 
-import { loginStudentAccount, registerStudentAccount } from '../lib/api';
+import {
+  loginStudentAccount,
+  registerStudentAccount,
+  requestPasswordReset as apiRequestPasswordReset,
+  confirmPasswordReset as apiConfirmPasswordReset,
+} from '../lib/api';
 
 interface AuthContextType {
   user: StudentUser | null;
@@ -18,6 +23,23 @@ interface AuthContextType {
     pinOrPassword?: string;
     monthlyAllowance?: number;
   }) => Promise<{ success: boolean; error?: string }>;
+  requestPasswordReset: (
+    identifier: string,
+    deliveryMethod?: 'email' | 'sms'
+  ) => Promise<{
+    success: boolean;
+    message?: string;
+    error?: string;
+    token?: string;
+    resetLink?: string;
+    maskedContact?: string;
+    studentNumber?: string;
+  }>;
+  confirmPasswordReset: (
+    studentNumber: string,
+    token: string,
+    newPassword: string
+  ) => Promise<{ success: boolean; message?: string; error?: string }>;
   logout: () => void;
 }
 
@@ -204,6 +226,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem(STORAGE_KEY);
   };
 
+  const requestPasswordReset = async (
+    identifier: string,
+    deliveryMethod: 'email' | 'sms' = 'email'
+  ) => {
+    try {
+      const res = await apiRequestPasswordReset(identifier, deliveryMethod);
+      return res;
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Failed to request password reset' };
+    }
+  };
+
+  const confirmPasswordReset = async (
+    studentNumber: string,
+    token: string,
+    newPassword: string
+  ) => {
+    try {
+      const res = await apiConfirmPasswordReset(studentNumber, token, newPassword);
+      return res;
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Failed to reset password' };
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -213,6 +260,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         loginAsDemo,
         register,
+        requestPasswordReset,
+        confirmPasswordReset,
         logout,
       }}
     >

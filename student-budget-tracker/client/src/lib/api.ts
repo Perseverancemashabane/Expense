@@ -575,3 +575,38 @@ export async function registerStudentAccount(data: {
   }
 }
 
+export async function requestPasswordReset(identifier: string, deliveryMethod: 'email' | 'sms' = 'email') {
+  try {
+    const res = await safeFetch(`${API_BASE}/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier, deliveryMethod }),
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+    const errData = await res.json().catch(() => ({}));
+    return { success: false, error: errData.error || 'Password reset request failed' };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Server unreachable' };
+  }
+}
+
+export async function confirmPasswordReset(studentNumber: string, token: string, newPassword: string) {
+  try {
+    const res = await safeFetch(`${API_BASE}/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ studentNumber, token, newPassword }),
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+    const errData = await res.json().catch(() => ({}));
+    return { success: false, error: errData.error || 'Password update failed' };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Server unreachable' };
+  }
+}
+
+

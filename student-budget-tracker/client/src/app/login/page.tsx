@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
 import {
   GraduationCap,
@@ -10,19 +10,31 @@ import {
   Eye,
   EyeOff,
   ArrowRight,
-  ShieldCheck,
+  ArrowLeft,
+  Mail,
+  MessageSquare,
+  KeyRound,
   CheckCircle2,
   AlertCircle,
   Sparkles,
-  Wallet,
-  Building2,
+  Send,
 } from 'lucide-react';
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter();
-  const { user, isAuthenticated, isLoading, login, loginAsDemo, register } = useAuth();
+  const searchParams = useSearchParams();
+  const {
+    user,
+    isAuthenticated,
+    isLoading,
+    login,
+    loginAsDemo,
+    register,
+    requestPasswordReset,
+    confirmPasswordReset,
+  } = useAuth();
 
-  const [tab, setTab] = useState<'signin' | 'register'>('signin');
+  const [tab, setTab] = useState<'signin' | 'register' | 'forgot' | 'reset'>('signin');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -37,8 +49,27 @@ export default function LoginPage() {
   const [showRegPassword, setShowRegPassword] = useState(false);
   const [regAllowance, setRegAllowance] = useState('3500');
 
+  // Forgot Password state
+  const [forgotId, setForgotId] = useState('');
+  const [deliveryMethod, setDeliveryMethod] = useState<'email' | 'sms'>('email');
+  const [forgotResult, setForgotResult] = useState<{
+    message?: string;
+    token?: string;
+    resetLink?: string;
+    maskedContact?: string;
+    studentNumber?: string;
+  } | null>(null);
+
+  // Reset Password state
+  const [resetStudentNumber, setResetStudentNumber] = useState('');
+  const [resetToken, setResetToken] = useState('');
+  const [resetNewPassword, setResetNewPassword] = useState('');
+  const [resetConfirmPassword, setResetConfirmPassword] = useState('');
+  const [showResetPassword, setShowResetPassword] = useState(false);
+
   // Feedback states
   const [error, setError] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // If already authenticated, redirect to dashboard
@@ -54,17 +85,38 @@ export default function LoginPage() {
       const saved = localStorage.getItem('tut_remembered_student_id');
       if (saved) {
         setIdentifier(saved);
+        setForgotId(saved);
       } else {
         setIdentifier('230099774');
+        setForgotId('230099774');
       }
     } catch (e) {
       setIdentifier('230099774');
+      setForgotId('230099774');
     }
   }, []);
+
+  // Handle URL query parameters for reset links (?mode=reset&token=...&student=...)
+  useEffect(() => {
+    const mode = searchParams.get('mode');
+    const token = searchParams.get('token');
+    const student = searchParams.get('student');
+
+    if (mode === 'reset' || token) {
+      setTab('reset');
+      if (token) setResetToken(token);
+      if (student) setResetStudentNumber(student);
+    } else if (mode === 'forgot') {
+      setTab('forgot');
+    } else if (mode === 'register') {
+      setTab('register');
+    }
+  }, [searchParams]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSuccessMsg('');
     setIsSubmitting(true);
 
     try {
@@ -95,6 +147,7 @@ export default function LoginPage() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSuccessMsg('');
 
     if (!regName.trim()) {
       setError('Please enter your full student name.');
@@ -131,6 +184,92 @@ export default function LoginPage() {
       }
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred during registration.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccessMsg('');
+    setForgotResult(null);
+
+    if (!forgotId.trim()) {
+      setError('Please provide your TUT student number or university email.');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const res = await requestPasswordReset(forgotId.trim(), deliveryMethod);
+      if (res.success) {
+        setSuccessMsg(res.message || 'Password reset link dispatched successfully!');
+        setForgotResult({
+          message: res.message,
+          token: res.token,
+          resetLink: res.resetLink,
+          maskedContact: res.maskedContact,
+          studentNumber: res.studentNumber,
+        });
+        if (res.studentNumber) {
+          setResetStudentNumber(res.studentNumber);
+        }
+        if (res.token) {
+          setResetToken(res.token);
+        }
+      } else {
+        setError(res.error || 'Could not find account. Please verify details.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to dispatch reset link.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccessMsg('');
+
+    if (!resetStudentNumber.trim()) {
+      setError('Please enter your TUT student number.');
+      return;
+    }
+    if (!resetToken.trim()) {
+      setError('Please enter the 6-digit reset code received via email or SMS.');
+      return;
+    }
+    if (!resetNewPassword || resetNewPassword.trim().length < 4) {
+      setError('New password must be at least 4 characters long.');
+      return;
+    }
+    if (resetNewPassword.trim() !== resetConfirmPassword.trim()) {
+      setError('New passwords do not match. Please re-enter.');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const res = await confirmPasswordReset(
+        resetStudentNumber.trim(),
+        resetToken.trim(),
+        resetNewPassword.trim()
+      );
+
+      if (res.success) {
+        setSuccessMsg(res.message || 'Your password has been successfully reset! You may now sign in.');
+        setIdentifier(resetStudentNumber.trim());
+        setPassword(resetNewPassword.trim());
+        setTab('signin');
+      } else {
+        setError(res.error || 'Password reset failed. Token may be invalid or expired.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'An unexpected error occurred during password reset.');
     } finally {
       setIsSubmitting(false);
     }
@@ -190,8 +329,9 @@ export default function LoginPage() {
               onClick={() => {
                 setTab('signin');
                 setError('');
+                setSuccessMsg('');
               }}
-              className={`flex-1 py-2 text-center rounded-lg transition ${
+              className={`flex-1 py-2 text-center rounded-lg transition cursor-pointer ${
                 tab === 'signin'
                   ? 'bg-emerald-600 text-white shadow-xs'
                   : 'text-slate-400 hover:text-slate-200'
@@ -204,8 +344,9 @@ export default function LoginPage() {
               onClick={() => {
                 setTab('register');
                 setError('');
+                setSuccessMsg('');
               }}
-              className={`flex-1 py-2 text-center rounded-lg transition ${
+              className={`flex-1 py-2 text-center rounded-lg transition cursor-pointer ${
                 tab === 'register'
                   ? 'bg-emerald-600 text-white shadow-xs'
                   : 'text-slate-400 hover:text-slate-200'
@@ -213,13 +354,58 @@ export default function LoginPage() {
             >
               Register New Student
             </button>
+            {(tab === 'forgot' || tab === 'reset') && (
+              <button
+                type="button"
+                className="flex-1 py-2 text-center rounded-lg bg-emerald-600 text-white shadow-xs"
+              >
+                {tab === 'forgot' ? 'Forgot Password' : 'Reset Password'}
+              </button>
+            )}
           </div>
+
+          {/* Success Alert */}
+          {successMsg && (
+            <div className="mb-5 p-3.5 rounded-xl bg-emerald-950/80 border border-emerald-500/50 text-emerald-200 text-xs flex items-start gap-2.5 animate-in fade-in duration-200">
+              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-400" />
+              <div className="space-y-1">
+                <span className="font-semibold">{successMsg}</span>
+              </div>
+            </div>
+          )}
 
           {/* Error Alert */}
           {error && (
-            <div className="mb-5 p-3 rounded-xl bg-rose-950/80 border border-rose-600/40 text-rose-300 text-xs flex items-start gap-2 animate-in fade-in duration-200">
+            <div className="mb-5 p-3.5 rounded-xl bg-rose-950/80 border border-rose-600/40 text-rose-300 text-xs flex items-start gap-2 animate-in fade-in duration-200">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
-              <span>{error}</span>
+              <div className="space-y-1.5">
+                <span>{error}</span>
+                {/* Helpful navigation when account conflict occurs */}
+                {error.toLowerCase().includes('already exists') && (
+                  <div className="flex items-center gap-3 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTab('signin');
+                        setError('');
+                      }}
+                      className="text-emerald-400 hover:underline font-semibold text-2xs cursor-pointer"
+                    >
+                      → Go to Sign In
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTab('forgot');
+                        setError('');
+                      }}
+                      className="text-amber-400 hover:underline font-semibold text-2xs cursor-pointer"
+                    >
+                      → Reset Password
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -252,12 +438,26 @@ export default function LoginPage() {
               </div>
 
               <div>
-                <label
-                  htmlFor="current-password"
-                  className="block text-xs font-semibold text-slate-300 mb-1"
-                >
-                  Student PIN or Password
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label
+                    htmlFor="current-password"
+                    className="block text-xs font-semibold text-slate-300"
+                  >
+                    Student Password or PIN
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTab('forgot');
+                      setError('');
+                      setSuccessMsg('');
+                      if (identifier) setForgotId(identifier);
+                    }}
+                    className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 hover:underline cursor-pointer"
+                  >
+                    Forgot Password / PIN?
+                  </button>
+                </div>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
                     <Lock className="w-4 h-4" />
@@ -473,6 +673,316 @@ export default function LoginPage() {
             </form>
           )}
 
+          {/* Tab 3: Forgotten Password / Request Reset Link Form */}
+          {tab === 'forgot' && (
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <KeyRound className="w-4 h-4 text-emerald-400" />
+                  Reset Student Password
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Enter your registered student number or university email. We will generate an encrypted reset token and dispatch a reset link.
+                </p>
+              </div>
+
+              <form onSubmit={handleForgotPassword} className="space-y-4">
+                <div>
+                  <label
+                    htmlFor="forgot-id"
+                    className="block text-xs font-semibold text-slate-300 mb-1"
+                  >
+                    TUT Student Number or Email
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                      <User className="w-4 h-4" />
+                    </div>
+                    <input
+                      id="forgot-id"
+                      type="text"
+                      required
+                      placeholder="e.g. 230099774 or student@tut4life.ac.za"
+                      value={forgotId}
+                      onChange={(e) => setForgotId(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Notification Dispatch Method
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDeliveryMethod('email')}
+                      className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl border text-xs font-semibold transition cursor-pointer ${
+                        deliveryMethod === 'email'
+                          ? 'bg-emerald-600/30 border-emerald-500 text-emerald-300 shadow-sm'
+                          : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <Mail className="w-3.5 h-3.5" />
+                      <span>University Email</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeliveryMethod('sms')}
+                      className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl border text-xs font-semibold transition cursor-pointer ${
+                        deliveryMethod === 'sms'
+                          ? 'bg-emerald-600/30 border-emerald-500 text-emerald-300 shadow-sm'
+                          : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      <span>Registered SMS</span>
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-md transition active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {isSubmitting ? (
+                    <span>Dispatching Reset Link...</span>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      <span>Send Reset Link & Code</span>
+                    </>
+                  )}
+                </button>
+              </form>
+
+              {/* If Reset Code was Generated and Dispatched */}
+              {forgotResult && (
+                <div className="mt-4 p-4 rounded-2xl bg-emerald-950/70 border border-emerald-500/40 space-y-3">
+                  <div className="flex items-center gap-2 text-emerald-300 font-bold text-xs">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>Reset Notification Dispatched</span>
+                  </div>
+                  <p className="text-2xs text-slate-300 leading-relaxed">
+                    A reset link has been dispatched to{' '}
+                    <strong className="text-white">{forgotResult.maskedContact}</strong>.
+                    You can enter the verification token or use the 1-click button below.
+                  </p>
+                  {forgotResult.token && (
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900/90 border border-slate-700">
+                      <div>
+                        <span className="text-3xs uppercase tracking-wider text-slate-400 font-bold block">
+                          Verification Code
+                        </span>
+                        <span className="text-base font-mono font-black text-emerald-400 tracking-widest">
+                          {forgotResult.token}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTab('reset');
+                          setError('');
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition cursor-pointer"
+                      >
+                        <span>Enter Code Now</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex items-center justify-between pt-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTab('signin');
+                    setError('');
+                    setSuccessMsg('');
+                  }}
+                  className="inline-flex items-center gap-1 text-slate-400 hover:text-slate-200 cursor-pointer"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Back to Sign In</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTab('reset');
+                    setError('');
+                  }}
+                  className="text-emerald-400 hover:underline cursor-pointer"
+                >
+                  Already have a reset code?
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Tab 4: Reset Password Execution Form */}
+          {tab === 'reset' && (
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-emerald-400" />
+                  Enter Reset Code & Set New Password
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Enter your student number, the 6-digit verification code, and your new password.
+                </p>
+              </div>
+
+              <form onSubmit={handleResetPassword} className="space-y-3.5">
+                <div>
+                  <label
+                    htmlFor="reset-student-number"
+                    className="block text-xs font-semibold text-slate-300 mb-1"
+                  >
+                    TUT Student Number
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                      <User className="w-4 h-4" />
+                    </div>
+                    <input
+                      id="reset-student-number"
+                      type="text"
+                      required
+                      placeholder="e.g. 230099774"
+                      value={resetStudentNumber}
+                      onChange={(e) => setResetStudentNumber(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="reset-token"
+                    className="block text-xs font-semibold text-slate-300 mb-1"
+                  >
+                    6-Digit Reset Code / Token
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                      <KeyRound className="w-4 h-4" />
+                    </div>
+                    <input
+                      id="reset-token"
+                      type="text"
+                      required
+                      maxLength={12}
+                      placeholder="e.g. 583921"
+                      value={resetToken}
+                      onChange={(e) => setResetToken(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="reset-new-password"
+                    className="block text-xs font-semibold text-slate-300 mb-1"
+                  >
+                    New Student Password or PIN
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                      <Lock className="w-4 h-4" />
+                    </div>
+                    <input
+                      id="reset-new-password"
+                      type={showResetPassword ? 'text' : 'password'}
+                      required
+                      minLength={4}
+                      placeholder="Enter new password (min 4 characters)"
+                      value={resetNewPassword}
+                      onChange={(e) => setResetNewPassword(e.target.value)}
+                      className="w-full pl-9 pr-10 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                    />
+                    <button
+                      type="button"
+                      aria-label={showResetPassword ? 'Hide password' : 'Show password'}
+                      onClick={() => setShowResetPassword(!showResetPassword)}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-200 cursor-pointer"
+                    >
+                      {showResetPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="reset-confirm-password"
+                    className="block text-xs font-semibold text-slate-300 mb-1"
+                  >
+                    Confirm New Password
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                      <Lock className="w-4 h-4" />
+                    </div>
+                    <input
+                      id="reset-confirm-password"
+                      type={showResetPassword ? 'text' : 'password'}
+                      required
+                      minLength={4}
+                      placeholder="Confirm new password"
+                      value={resetConfirmPassword}
+                      onChange={(e) => setResetConfirmPassword(e.target.value)}
+                      className="w-full pl-9 pr-10 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full mt-2 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-md transition active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {isSubmitting ? (
+                    <span>Saving New Password...</span>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Update Password & Return to Sign In</span>
+                    </>
+                  )}
+                </button>
+              </form>
+
+              <div className="flex items-center justify-between pt-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTab('forgot');
+                    setError('');
+                    setSuccessMsg('');
+                  }}
+                  className="inline-flex items-center gap-1 text-slate-400 hover:text-slate-200 cursor-pointer"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Request new code</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTab('signin');
+                    setError('');
+                  }}
+                  className="text-emerald-400 hover:underline cursor-pointer"
+                >
+                  Return to Sign In
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Academic Footer Info */}
           <div className="mt-6 pt-5 border-t border-slate-800 text-center space-y-1">
             <p className="text-2xs text-slate-400">
@@ -485,6 +995,20 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-900 flex items-center justify-center text-slate-400">
+          Loading portal authentication...
+        </div>
+      }
+    >
+      <LoginContent />
+    </Suspense>
   );
 }
 

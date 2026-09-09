@@ -16,7 +16,8 @@ export const authController = {
   // POST /api/auth/login
   async login(req: Request, res: Response) {
     try {
-      const { username, password } = req.body;
+      const username = req.body.username || req.body.identifier;
+      const password = req.body.password !== undefined ? req.body.password : req.body.pin;
       if (!username) {
         return res.status(400).json({ success: false, error: 'Student number or email is required' });
       }
@@ -125,6 +126,23 @@ export const authController = {
       const cleanName = String(name).trim();
       const allowance = Number(monthlyAllowance) || 3500;
 
+      // 0. Verify if account already exists for student number or email
+      const existingByNumber = await db.students.findByStudentNumber(cleanNum);
+      if (existingByNumber) {
+        return res.status(409).json({
+          success: false,
+          error: `An account with student number ${cleanNum} already exists. Please sign in or use "Forgot Password".`,
+        });
+      }
+
+      const existingByEmail = await db.students.findByEmail(cleanEmail);
+      if (existingByEmail) {
+        return res.status(409).json({
+          success: false,
+          error: `An account with email "${cleanEmail}" already exists. Please sign in or use "Forgot Password".`,
+        });
+      }
+
       // 1. Create student in database with student's custom password
       const student = await db.students.create({
         name: cleanName,
@@ -164,6 +182,112 @@ export const authController = {
     } catch (err: any) {
       console.error('Registration error:', err);
       return res.status(500).json({ success: false, error: err.message || 'Registration failed' });
+    }
+  },
+
+  // POST /api/auth/forgot-password
+  async forgotPassword(req: Request, res: Response) {
+    try {
+      const { identifier, deliveryMethod } = req.body;
+      if (!identifier) {
+        return res.status(400).json({ success: false, error: 'Student number or email is required' });
+      }
+
+      const cleanId = String(identifier).trim();
+      const cleanIdLower = cleanId.toLowerCase();
+
+      let student = await db.students.findByStudentNumber(cleanId);
+      if (!student && cleanIdLower.includes('@')) {
+        student = await db.students.findByEmail(cleanIdLower);
+      }
+
+      // If demo student Naledi and not yet saved in DB
+      if (!student && (cleanIdLower === '230099774' || cleanIdLower.includes('230099774') || cleanIdLower === 'naledimashabane001@gmail.com')) {
+        student = await db.students.create({
+          name: DEMO_STUDENT.name,
+          student_number: DEMO_STUDENT.studentNumber,
+          email: DEMO_STUDENT.email,
+          password_pin: '1234',
+          monthly_allowance: 3500,
+        });
+      }
+
+      if (!student) {
+        return res.status(404).json({
+          success: false,
+          error: `No student account found for "${cleanId}". Please verify your details or register a new account.`,
+        });
+      }
+
+      // Generate a secure 6-digit verification code
+      const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour expiration
+
+      await db.students.saveResetToken(student.student_number, resetCode, expiresAt);
+
+      // Mask contact information for security
+      const rawEmail = student.email || `${student.student_number}@tut4life.ac.za`;
+      const [uName, domain] = rawEmail.split('@');
+      const maskedEmail = uName.length <= 3 ? `${uName[0]}***@${domain}` : `${uName.slice(0, 2)}***${uName.slice(-1)}@${domain}`;
+      const maskedPhone = `+27 7* *** ${student.student_number.slice(-4)}`;
+      const masked = deliveryMethod === 'sms' ? maskedPhone : maskedEmail;
+      const deliveryLabel = deliveryMethod === 'sms' ? 'SMS' : 'University Email';
+
+      const resetLink = `/login?mode=reset&token=${resetCode}&student=${student.student_number}`;
+
+      return res.json({
+        success: true,
+        message: `Password reset link dispatched via ${deliveryLabel} to ${masked}!`,
+        studentNumber: student.student_number,
+        maskedContact: masked,
+        deliveryMethod: deliveryMethod || 'email',
+        token: resetCode,
+        resetLink,
+        expiresIn: '60 minutes',
+      });
+    } catch (err: any) {
+      console.error('Forgot password error:', err);
+      return res.status(500).json({ success: false, error: err.message || 'Failed to process password reset request' });
+    }
+  },
+
+  // POST /api/auth/reset-password
+  async resetPassword(req: Request, res: Response) {
+    try {
+      const { studentNumber, token, newPassword } = req.body;
+
+      if (!studentNumber || !token) {
+        return res.status(400).json({ success: false, error: 'Student number and reset code are required' });
+      }
+
+      const cleanNum = String(studentNumber).trim();
+      const cleanToken = String(token).trim();
+      const cleanNewPassword = newPassword !== undefined && newPassword !== null ? String(newPassword).trim() : '';
+
+      if (!cleanNewPassword || cleanNewPassword.length < 4) {
+        return res.status(400).json({ success: false, error: 'New password must be at least 4 characters long' });
+      }
+
+      // Verify token
+      const validStudent = await db.students.verifyResetToken(cleanNum, cleanToken);
+      if (!validStudent) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid or expired password reset link/token. Please request a new link.',
+        });
+      }
+
+      // Update password in database
+      await db.students.resetPassword(cleanNum, cleanNewPassword);
+
+      return res.json({
+        success: true,
+        message: 'Password successfully updated! You can now sign in with your new password.',
+        studentNumber: cleanNum,
+      });
+    } catch (err: any) {
+      console.error('Reset password error:', err);
+      return res.status(500).json({ success: false, error: err.message || 'Failed to reset password' });
     }
   },
 

@@ -1,10 +1,18 @@
 import { Request, Response } from 'express';
 import { db } from '../config/db';
 
+function getStudentNumber(req: Request): string {
+  const fromHeader = req.headers['x-student-id'] as string;
+  const fromQuery = req.query.student_number as string;
+  const fromBody = req.body?.student_number as string;
+  return (fromHeader || fromQuery || fromBody || '230099774').trim();
+}
+
 export const expenseController = {
   // GET /api/expenses
   async getAllExpenses(req: Request, res: Response) {
     try {
+      const studentNumber = getStudentNumber(req);
       const { category, startDate, endDate, search, sortBy, sortOrder, month } = req.query;
 
       let effectiveStart = startDate as string | undefined;
@@ -21,6 +29,7 @@ export const expenseController = {
       }
 
       const expenses = await db.expenses.getAll({
+        studentNumber,
         category: category as string,
         startDate: effectiveStart,
         endDate: effectiveEnd,
@@ -29,7 +38,7 @@ export const expenseController = {
         sortOrder: (sortOrder as 'asc' | 'desc') || 'desc',
       });
 
-      const totalAmount = expenses.reduce((sum, item) => sum + Number(item.amount), 0);
+      const totalAmount = expenses.reduce((sum: number, item: any) => sum + Number(item.amount), 0);
 
       return res.json({
         success: true,
@@ -46,12 +55,13 @@ export const expenseController = {
   // GET /api/expenses/:id
   async getExpenseById(req: Request, res: Response) {
     try {
+      const studentNumber = getStudentNumber(req);
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ success: false, error: 'Invalid expense ID' });
       }
 
-      const expense = await db.expenses.getById(id);
+      const expense = await db.expenses.getById(id, studentNumber);
       if (!expense) {
         return res.status(404).json({ success: false, error: 'Expense not found' });
       }
@@ -66,6 +76,7 @@ export const expenseController = {
   // POST /api/expenses
   async createExpense(req: Request, res: Response) {
     try {
+      const studentNumber = getStudentNumber(req);
       const { title, amount, category_name, category_id, date, notes, payment_method } = req.body;
 
       if (!title || typeof title !== 'string' || title.trim() === '') {
@@ -94,6 +105,7 @@ export const expenseController = {
       }
 
       const newExpense = await db.expenses.create({
+        student_number: studentNumber,
         title: title.trim(),
         amount: parsedAmount,
         category_id: resolvedCategoryId || null,
@@ -117,12 +129,13 @@ export const expenseController = {
   // PUT /api/expenses/:id
   async updateExpense(req: Request, res: Response) {
     try {
+      const studentNumber = getStudentNumber(req);
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ success: false, error: 'Invalid expense ID' });
       }
 
-      const existing = await db.expenses.getById(id);
+      const existing = await db.expenses.getById(id, studentNumber);
       if (!existing) {
         return res.status(404).json({ success: false, error: 'Expense not found' });
       }
@@ -157,7 +170,7 @@ export const expenseController = {
       if (notes !== undefined) updates.notes = String(notes).trim();
       if (payment_method !== undefined) updates.payment_method = payment_method;
 
-      const updated = await db.expenses.update(id, updates);
+      const updated = await db.expenses.update(id, updates, studentNumber);
 
       return res.json({
         success: true,
@@ -173,12 +186,13 @@ export const expenseController = {
   // DELETE /api/expenses/:id
   async deleteExpense(req: Request, res: Response) {
     try {
+      const studentNumber = getStudentNumber(req);
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ success: false, error: 'Invalid expense ID' });
       }
 
-      const deleted = await db.expenses.delete(id);
+      const deleted = await db.expenses.delete(id, studentNumber);
       if (!deleted) {
         return res.status(404).json({ success: false, error: 'Expense not found or already deleted' });
       }
@@ -193,4 +207,5 @@ export const expenseController = {
     }
   },
 };
+
 

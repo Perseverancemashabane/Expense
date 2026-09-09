@@ -207,31 +207,122 @@ export const db = {
     return pool;
   },
 
-  // Storage Repository for Budgets
-  budgets: {
-    async getByMonth(month: string) {
+  // Storage Repository for Students
+  students: {
+    async create(student: {
+      name: string;
+      student_number: string;
+      email: string;
+      password_pin?: string;
+      monthly_allowance?: number;
+    }) {
+      const allowance = Number(student.monthly_allowance) || 3500.0;
       if (pool && isUsingPostgres) {
-        const res = await pool.query('SELECT * FROM budgets WHERE month = $1', [month]);
+        const query = `
+          INSERT INTO students (name, student_number, email, password_pin, monthly_allowance, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+          ON CONFLICT (student_number)
+          DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email, updated_at = NOW()
+          RETURNING *;
+        `;
+        const res = await pool.query(query, [
+          student.name.trim(),
+          student.student_number.trim(),
+          student.email.trim().toLowerCase(),
+          student.password_pin || '1234',
+          allowance,
+        ]);
+        return res.rows[0];
+      }
+
+      const data = getLocalData();
+      if (!data.students) data.students = [];
+      const existing = data.students.find((s: any) => s.student_number === student.student_number.trim());
+      const now = new Date().toISOString();
+      if (existing) {
+        existing.name = student.name.trim();
+        existing.email = student.email.trim().toLowerCase();
+        existing.updated_at = now;
+        saveLocalData(data);
+        return existing;
+      }
+      const newStudent = {
+        id: data.students.length + 1,
+        name: student.name.trim(),
+        student_number: student.student_number.trim(),
+        email: student.email.trim().toLowerCase(),
+        password_pin: student.password_pin || '1234',
+        monthly_allowance: allowance,
+        created_at: now,
+        updated_at: now,
+      };
+      data.students.push(newStudent);
+      saveLocalData(data);
+      return newStudent;
+    },
+
+    async findByStudentNumber(studentNumber: string) {
+      const clean = studentNumber.trim();
+      if (pool && isUsingPostgres) {
+        const res = await pool.query('SELECT * FROM students WHERE student_number = $1', [clean]);
         return res.rows[0] || null;
       }
       const data = getLocalData();
-      return data.budgets.find((b: any) => b.month === month) || null;
+      if (!data.students) data.students = [];
+      return data.students.find((s: any) => s.student_number === clean) || null;
     },
 
-    async upsert(month: string, amount: number, notes: string = '') {
+    async findByEmail(email: string) {
+      const clean = email.trim().toLowerCase();
+      if (pool && isUsingPostgres) {
+        const res = await pool.query('SELECT * FROM students WHERE LOWER(email) = $1', [clean]);
+        return res.rows[0] || null;
+      }
+      const data = getLocalData();
+      if (!data.students) data.students = [];
+      return data.students.find((s: any) => s.email.toLowerCase() === clean) || null;
+    },
+
+    async getAll() {
+      if (pool && isUsingPostgres) {
+        const res = await pool.query('SELECT id, name, student_number, email, monthly_allowance, created_at FROM students ORDER BY id ASC');
+        return res.rows;
+      }
+      const data = getLocalData();
+      return data.students || [];
+    },
+  },
+
+  // Storage Repository for Budgets (Isolated per student)
+  budgets: {
+    async getByMonth(month: string, studentNumber: string = '230099774') {
+      if (pool && isUsingPostgres) {
+        const res = await pool.query(
+          'SELECT * FROM budgets WHERE month = $1 AND student_number = $2',
+          [month, studentNumber]
+        );
+        return res.rows[0] || null;
+      }
+      const data = getLocalData();
+      return data.budgets.find((b: any) => b.month === month && (b.student_number || '230099774') === studentNumber) || null;
+    },
+
+    async upsert(month: string, amount: number, notes: string = '', studentNumber: string = '230099774') {
       if (pool && isUsingPostgres) {
         const query = `
-          INSERT INTO budgets (month, amount, notes, updated_at)
-          VALUES ($1, $2, $3, NOW())
-          ON CONFLICT (month)
+          INSERT INTO budgets (student_number, month, amount, notes, updated_at)
+          VALUES ($1, $2, $3, $4, NOW())
+          ON CONFLICT (student_number, month)
           DO UPDATE SET amount = EXCLUDED.amount, notes = EXCLUDED.notes, updated_at = NOW()
           RETURNING *;
         `;
-        const res = await pool.query(query, [month, amount, notes]);
+        const res = await pool.query(query, [studentNumber, month, amount, notes]);
         return res.rows[0];
       }
       const data = getLocalData();
-      const existingIndex = data.budgets.findIndex((b: any) => b.month === month);
+      const existingIndex = data.budgets.findIndex(
+        (b: any) => b.month === month && (b.student_number || '230099774') === studentNumber
+      );
       const now = new Date().toISOString();
       if (existingIndex >= 0) {
         data.budgets[existingIndex].amount = Number(amount);
@@ -242,6 +333,7 @@ export const db = {
       } else {
         const newBudget = {
           id: data.budgets.length > 0 ? Math.max(...data.budgets.map((b: any) => b.id)) + 1 : 1,
+          student_number: studentNumber,
           month,
           amount: Number(amount),
           notes,
@@ -276,9 +368,10 @@ export const db = {
     },
   },
 
-  // Storage Repository for Expenses
+  // Storage Repository for Expenses (Isolated per student)
   expenses: {
     async getAll(filters: {
+      studentNumber?: string;
       category?: string;
       startDate?: string;
       endDate?: string;
@@ -286,10 +379,12 @@ export const db = {
       sortBy?: string;
       sortOrder?: 'asc' | 'desc';
     } = {}) {
+      const studentNum = (filters.studentNumber || '230099774').trim();
+
       if (pool && isUsingPostgres) {
-        let query = 'SELECT * FROM expenses WHERE 1=1';
-        const params: any[] = [];
-        let paramIndex = 1;
+        let query = 'SELECT * FROM expenses WHERE student_number = $1';
+        const params: any[] = [studentNum];
+        let paramIndex = 2;
 
         if (filters.category && filters.category !== 'All') {
           query += ` AND category_name = $${paramIndex++}`;
@@ -318,7 +413,7 @@ export const db = {
       }
 
       const data = getLocalData();
-      let results = [...data.expenses];
+      let results = data.expenses.filter((e: any) => (e.student_number || '230099774') === studentNum);
 
       if (filters.category && filters.category !== 'All') {
         results = results.filter((e: any) => e.category_name.toLowerCase() === filters.category!.toLowerCase());
@@ -353,16 +448,21 @@ export const db = {
       return results;
     },
 
-    async getById(id: number) {
+    async getById(id: number, studentNumber?: string) {
       if (pool && isUsingPostgres) {
+        if (studentNumber) {
+          const res = await pool.query('SELECT * FROM expenses WHERE id = $1 AND student_number = $2', [id, studentNumber.trim()]);
+          return res.rows[0] || null;
+        }
         const res = await pool.query('SELECT * FROM expenses WHERE id = $1', [id]);
         return res.rows[0] || null;
       }
       const data = getLocalData();
-      return data.expenses.find((e: any) => e.id === id) || null;
+      return data.expenses.find((e: any) => e.id === id && (!studentNumber || (e.student_number || '230099774') === studentNumber.trim())) || null;
     },
 
     async create(expense: {
+      student_number?: string;
       title: string;
       amount: number;
       category_id?: number | null;
@@ -371,13 +471,16 @@ export const db = {
       notes?: string;
       payment_method?: string;
     }) {
+      const studentNum = (expense.student_number || '230099774').trim();
+
       if (pool && isUsingPostgres) {
         const query = `
-          INSERT INTO expenses (title, amount, category_id, category_name, date, notes, payment_method, created_at, updated_at)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+          INSERT INTO expenses (student_number, title, amount, category_id, category_name, date, notes, payment_method, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
           RETURNING *;
         `;
         const res = await pool.query(query, [
+          studentNum,
           expense.title,
           expense.amount,
           expense.category_id || null,
@@ -394,6 +497,7 @@ export const db = {
       const now = new Date().toISOString();
       const newExpense = {
         id: newId,
+        student_number: studentNum,
         title: expense.title,
         amount: Number(expense.amount),
         category_id: expense.category_id || null,
@@ -417,7 +521,7 @@ export const db = {
       date: string;
       notes?: string;
       payment_method?: string;
-    }>) {
+    }>, studentNumber?: string) {
       if (pool && isUsingPostgres) {
         const setClauses: string[] = [];
         const params: any[] = [];
@@ -455,18 +559,27 @@ export const db = {
         setClauses.push(`updated_at = NOW()`);
         params.push(id);
 
-        const query = `
+        let query = `
           UPDATE expenses
           SET ${setClauses.join(', ')}
-          WHERE id = $${idx}
-          RETURNING *;
+          WHERE id = $${idx++}
         `;
+
+        if (studentNumber) {
+          query += ` AND student_number = $${idx}`;
+          params.push(studentNumber.trim());
+        }
+
+        query += ' RETURNING *;';
+
         const res = await pool.query(query, params);
         return res.rows[0] || null;
       }
 
       const data = getLocalData();
-      const itemIndex = data.expenses.findIndex((e: any) => e.id === id);
+      const itemIndex = data.expenses.findIndex(
+        (e: any) => e.id === id && (!studentNumber || (e.student_number || '230099774') === studentNumber.trim())
+      );
       if (itemIndex === -1) return null;
 
       const updated = {
@@ -480,15 +593,21 @@ export const db = {
       return updated;
     },
 
-    async delete(id: number) {
+    async delete(id: number, studentNumber?: string) {
       if (pool && isUsingPostgres) {
+        if (studentNumber) {
+          const res = await pool.query('DELETE FROM expenses WHERE id = $1 AND student_number = $2 RETURNING *', [id, studentNumber.trim()]);
+          return (res.rowCount ?? 0) > 0;
+        }
         const res = await pool.query('DELETE FROM expenses WHERE id = $1 RETURNING *', [id]);
         return (res.rowCount ?? 0) > 0;
       }
 
       const data = getLocalData();
       const initialLen = data.expenses.length;
-      data.expenses = data.expenses.filter((e: any) => e.id !== id);
+      data.expenses = data.expenses.filter(
+        (e: any) => !(e.id === id && (!studentNumber || (e.student_number || '230099774') === studentNumber.trim()))
+      );
       const deleted = data.expenses.length < initialLen;
       if (deleted) {
         saveLocalData(data);

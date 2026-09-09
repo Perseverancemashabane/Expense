@@ -123,13 +123,46 @@ const INITIAL_DEMO_DATA = {
   ],
 };
 
+export function getActiveStudentNumber(): string {
+  if (typeof window === 'undefined') return '230099774';
+  try {
+    const session = localStorage.getItem('tut_student_auth_session');
+    if (session) {
+      const parsed = JSON.parse(session);
+      if (parsed?.studentNumber) return String(parsed.studentNumber).trim();
+    }
+  } catch {}
+  return '230099774';
+}
+
 function getLocalStore() {
   if (typeof window === 'undefined') return INITIAL_DEMO_DATA;
+  const studentNum = getActiveStudentNumber();
+  const key = `student_budget_data_${studentNum}`;
   try {
-    const raw = localStorage.getItem('student_budget_data');
+    const raw = localStorage.getItem(key);
     if (!raw) {
-      localStorage.setItem('student_budget_data', JSON.stringify(INITIAL_DEMO_DATA));
-      return INITIAL_DEMO_DATA;
+      if (studentNum === '230099774') {
+        localStorage.setItem(key, JSON.stringify(INITIAL_DEMO_DATA));
+        return JSON.parse(JSON.stringify(INITIAL_DEMO_DATA));
+      } else {
+        const emptyStudentData = {
+          budget: {
+            amount: 3500,
+            month: '2026-09',
+            notes: 'Student Monthly Allowance',
+          },
+          categories: INITIAL_DEMO_DATA.categories.map((c) => ({
+            ...c,
+            total_spent: 0,
+            expense_count: 0,
+            percentage_of_total_spent: 0,
+          })),
+          expenses: [],
+        };
+        localStorage.setItem(key, JSON.stringify(emptyStudentData));
+        return emptyStudentData;
+      }
     }
     return JSON.parse(raw);
   } catch (e) {
@@ -140,7 +173,8 @@ function getLocalStore() {
 function saveLocalStore(data: any) {
   if (typeof window !== 'undefined') {
     try {
-      localStorage.setItem('student_budget_data', JSON.stringify(data));
+      const studentNum = getActiveStudentNumber();
+      localStorage.setItem(`student_budget_data_${studentNum}`, JSON.stringify(data));
     } catch (e) {
       console.warn('localStorage save failed:', e);
     }
@@ -166,8 +200,13 @@ async function safeFetch(url: string, options: RequestInit = {}, timeoutMs = 150
   }
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
+  const headers = new Headers(options.headers || {});
+  const studentNum = getActiveStudentNumber();
+  if (!headers.has('X-Student-Id')) {
+    headers.set('X-Student-Id', studentNum);
+  }
   try {
-    const res = await fetch(url, { ...options, signal: controller.signal });
+    const res = await fetch(url, { ...options, headers, signal: controller.signal });
     clearTimeout(id);
     return res;
   } catch (err) {
@@ -489,3 +528,50 @@ export async function resetDatabase() {
   saveLocalStore(INITIAL_DEMO_DATA);
   return { success: true, message: 'Reset to default student demo records' };
 }
+
+export async function loginStudentAccount(username: string, pin?: string) {
+  try {
+    const res = await safeFetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password: pin }),
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+    const errData = await res.json().catch(() => ({}));
+    return { success: false, error: errData.error || 'Authentication failed' };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Server unreachable' };
+  }
+}
+
+export async function registerStudentAccount(data: {
+  name: string;
+  studentNumber: string;
+  email?: string;
+  pin?: string;
+  monthlyAllowance?: number;
+}) {
+  try {
+    const res = await safeFetch(`${API_BASE}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: data.name,
+        studentNumber: data.studentNumber,
+        email: data.email,
+        password: data.pin || '1234',
+        monthlyAllowance: data.monthlyAllowance || 3500,
+      }),
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+    const errData = await res.json().catch(() => ({}));
+    return { success: false, error: errData.error || 'Registration failed' };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Server unreachable' };
+  }
+}
+

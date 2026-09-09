@@ -2,10 +2,18 @@ import { Request, Response } from 'express';
 import { db } from '../config/db';
 import { CategorySummary } from '../types';
 
+function getStudentNumber(req: Request): string {
+  const fromHeader = req.headers['x-student-id'] as string;
+  const fromQuery = req.query.student_number as string;
+  const fromBody = req.body?.student_number as string;
+  return (fromHeader || fromQuery || fromBody || '230099774').trim();
+}
+
 export const categoryController = {
   // GET /api/categories?month=YYYY-MM
   async getAllCategories(req: Request, res: Response) {
     try {
+      const studentNumber = getStudentNumber(req);
       const month = (req.query.month as string) || '2026-09';
       const categories = await db.categories.getAll();
 
@@ -17,14 +25,14 @@ export const categoryController = {
       const startDate = `${month}-01`;
       const endDate = `${month}-${String(lastDay).padStart(2, '0')}`;
 
-      const expenses = await db.expenses.getAll({ startDate, endDate });
-      const totalMonthSpend = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
+      const expenses = await db.expenses.getAll({ studentNumber, startDate, endDate });
+      const totalMonthSpend = expenses.reduce((sum: number, e: any) => sum + Number(e.amount), 0);
 
       const summaries: CategorySummary[] = categories.map((cat: any) => {
         const catExpenses = expenses.filter(
-          (e) => e.category_name.toLowerCase() === cat.name.toLowerCase() || e.category_id === cat.id
+          (e: any) => e.category_name.toLowerCase() === cat.name.toLowerCase() || e.category_id === cat.id
         );
-        const totalSpent = catExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
+        const totalSpent = catExpenses.reduce((sum: number, e: any) => sum + Number(e.amount), 0);
         const percentage = totalMonthSpend > 0 ? (totalSpent / totalMonthSpend) * 100 : 0;
 
         return {
@@ -51,4 +59,5 @@ export const categoryController = {
     }
   },
 };
+
 

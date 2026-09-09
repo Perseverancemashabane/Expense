@@ -1,10 +1,18 @@
 import { Request, Response } from 'express';
 import { db } from '../config/db';
 
+function getStudentNumber(req: Request): string {
+  const fromHeader = req.headers['x-student-id'] as string;
+  const fromQuery = req.query.student_number as string;
+  const fromBody = req.body?.student_number as string;
+  return (fromHeader || fromQuery || fromBody || '230099774').trim();
+}
+
 export const analyticsController = {
   // GET /api/analytics/summary?month=YYYY-MM
   async getSummary(req: Request, res: Response) {
     try {
+      const studentNumber = getStudentNumber(req);
       const month = (req.query.month as string) || '2026-09';
       const [yearStr, monthStr] = month.split('-');
       const y = parseInt(yearStr, 10);
@@ -13,16 +21,18 @@ export const analyticsController = {
       const startDate = `${month}-01`;
       const endDate = `${month}-${String(lastDay).padStart(2, '0')}`;
 
-      // 1. Budget record
-      let budgetRecord = await db.budgets.getByMonth(month);
+      // 1. Budget record for this student
+      let budgetRecord = await db.budgets.getByMonth(month, studentNumber);
       if (!budgetRecord) {
-        budgetRecord = await db.budgets.upsert(month, 3500, 'Student Monthly Budget');
+        const student = await db.students.findByStudentNumber(studentNumber);
+        const allowance = student ? Number(student.monthly_allowance) : 3500;
+        budgetRecord = await db.budgets.upsert(month, allowance, 'Student Monthly Allowance', studentNumber);
       }
       const budgetAmount = Number(budgetRecord.amount);
 
-      // 2. Expenses for month
-      const expenses = await db.expenses.getAll({ startDate, endDate });
-      const totalSpent = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
+      // 2. Expenses for month for this student
+      const expenses = await db.expenses.getAll({ studentNumber, startDate, endDate });
+      const totalSpent = expenses.reduce((sum: number, e: any) => sum + Number(e.amount), 0);
       const remainingBudget = budgetAmount - totalSpent;
       const percentageSpent = budgetAmount > 0 ? (totalSpent / budgetAmount) * 100 : 0;
 
@@ -47,9 +57,9 @@ export const analyticsController = {
       const categories = await db.categories.getAll();
       const categoryBreakdown = categories.map((cat: any) => {
         const catExpenses = expenses.filter(
-          (e) => e.category_name.toLowerCase() === cat.name.toLowerCase() || e.category_id === cat.id
+          (e: any) => e.category_name.toLowerCase() === cat.name.toLowerCase() || e.category_id === cat.id
         );
-        const catSpent = catExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
+        const catSpent = catExpenses.reduce((sum: number, e: any) => sum + Number(e.amount), 0);
         const percentage = totalSpent > 0 ? (catSpent / totalSpent) * 100 : 0;
 
         return {
@@ -112,3 +122,4 @@ export const analyticsController = {
     }
   },
 };
+

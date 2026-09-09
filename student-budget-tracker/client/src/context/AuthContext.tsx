@@ -3,6 +3,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { StudentUser } from '../types';
 
+import { loginStudentAccount, registerStudentAccount } from '../lib/api';
+
 interface AuthContextType {
   user: StudentUser | null;
   isAuthenticated: boolean;
@@ -57,8 +59,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (identifier: string, pinOrPassword = ''): Promise<{ success: boolean; error?: string }> => {
     const cleanId = identifier.trim().toLowerCase();
-    
-    // Check if identifier matches demo student
+
+    // 1. Try Live Database Authentication first
+    try {
+      const apiRes = await loginStudentAccount(identifier, pinOrPassword);
+      if (apiRes.success && apiRes.user) {
+        setUser(apiRes.user);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(apiRes.user));
+        return { success: true };
+      }
+    } catch (apiErr) {
+      console.warn('Live API sign-in attempted, falling back to client mode:', apiErr);
+    }
+
+    // 2. Check if identifier matches demo student
     if (
       cleanId === '230099774' ||
       cleanId === 'naledimashabane001@gmail.com' ||
@@ -70,7 +84,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: true };
     }
 
-    // Check custom registered students in localStorage
+    // 3. Check custom registered students in localStorage
     try {
       const storedList = localStorage.getItem('tut_registered_students');
       const registered: StudentUser[] = storedList ? JSON.parse(storedList) : [];
@@ -87,7 +101,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.warn('Error reading registered students:', e);
     }
 
-    // For academic evaluation: If a student number (numbers only) or valid email is provided, allow access with dynamic profile
+    // 4. For academic evaluation: If a student number or valid email is provided, allow access with dynamic profile
     if (/^\d{7,10}$/.test(cleanId) || cleanId.includes('@')) {
       const isEmail = cleanId.includes('@');
       const studentNum = isEmail ? cleanId.split('@')[0] : cleanId;
@@ -134,7 +148,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .slice(0, 2)
       .toUpperCase() || 'ST';
 
-    const newUser: StudentUser = {
+    const localUser: StudentUser = {
       id: `tut-${data.studentNumber.trim()}`,
       name: data.name.trim(),
       studentNumber: data.studentNumber.trim(),
@@ -145,17 +159,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       avatarInitials: initials,
     };
 
+    // 1. Try Live Database Registration
+    try {
+      const apiRes = await registerStudentAccount({
+        name: data.name,
+        studentNumber: data.studentNumber,
+        email: data.email,
+        pin: data.pinOrPassword,
+        monthlyAllowance: data.monthlyAllowance,
+      });
+
+      if (apiRes.success && apiRes.user) {
+        setUser(apiRes.user);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(apiRes.user));
+
+        // Also update local list
+        try {
+          const storedList = localStorage.getItem('tut_registered_students');
+          const registered: StudentUser[] = storedList ? JSON.parse(storedList) : [];
+          registered.push(apiRes.user);
+          localStorage.setItem('tut_registered_students', JSON.stringify(registered));
+        } catch {}
+
+        return { success: true };
+      }
+    } catch (apiErr) {
+      console.warn('Live API registration attempted, falling back to client mode:', apiErr);
+    }
+
+    // 2. Client fallback
     try {
       const storedList = localStorage.getItem('tut_registered_students');
       const registered: StudentUser[] = storedList ? JSON.parse(storedList) : [];
-      registered.push(newUser);
+      registered.push(localUser);
       localStorage.setItem('tut_registered_students', JSON.stringify(registered));
     } catch (e) {
       console.warn('Failed to save to registered students pool:', e);
     }
 
-    setUser(newUser);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newUser));
+    setUser(localUser);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(localUser));
     return { success: true };
   };
 

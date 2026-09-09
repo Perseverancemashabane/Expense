@@ -2,35 +2,46 @@ import { Request, Response } from 'express';
 import { db } from '../config/db';
 import { BudgetSummary } from '../types';
 
+function getStudentNumber(req: Request): string {
+  const fromHeader = req.headers['x-student-id'] as string;
+  const fromQuery = req.query.student_number as string;
+  const fromBody = req.body?.student_number as string;
+  return (fromHeader || fromQuery || fromBody || '230099774').trim();
+}
+
 export const budgetController = {
   // GET /api/budget/current or GET /api/budget?month=YYYY-MM
   async getCurrentBudget(req: Request, res: Response) {
     try {
+      const studentNumber = getStudentNumber(req);
       const monthQuery = (req.query.month as string) || '2026-09';
       const [yearStr, monthStr] = monthQuery.split('-');
       const year = parseInt(yearStr, 10) || 2026;
       const monthNum = parseInt(monthStr, 10) || 9;
 
-      // 1. Fetch budget record
-      let budgetRecord = await db.budgets.getByMonth(monthQuery);
+      // 1. Fetch budget record for this student
+      let budgetRecord = await db.budgets.getByMonth(monthQuery, studentNumber);
       if (!budgetRecord) {
-        // Create default budget of R 3500 if none exists
-        budgetRecord = await db.budgets.upsert(monthQuery, 3500, 'Default Student Monthly Budget');
+        // Look up student allowance
+        const student = await db.students.findByStudentNumber(studentNumber);
+        const allowance = student ? Number(student.monthly_allowance) : 3500;
+        budgetRecord = await db.budgets.upsert(monthQuery, allowance, 'Student Monthly Allowance', studentNumber);
       }
 
       const budgetAmount = Number(budgetRecord.amount);
 
-      // 2. Fetch all expenses for this month
+      // 2. Fetch expenses for this student and this month
       const startOfMonth = `${monthQuery}-01`;
       const lastDay = new Date(year, monthNum, 0).getDate();
       const endOfMonth = `${monthQuery}-${String(lastDay).padStart(2, '0')}`;
 
       const expenses = await db.expenses.getAll({
+        studentNumber,
         startDate: startOfMonth,
         endDate: endOfMonth,
       });
 
-      const totalSpent = expenses.reduce((acc, curr) => acc + Number(curr.amount), 0);
+      const totalSpent = expenses.reduce((acc: number, curr: any) => acc + Number(curr.amount), 0);
       const remainingBudget = budgetAmount - totalSpent;
       const percentageSpent = budgetAmount > 0 ? (totalSpent / budgetAmount) * 100 : 0;
 
@@ -90,6 +101,7 @@ export const budgetController = {
   // POST /api/budget
   async setBudget(req: Request, res: Response) {
     try {
+      const studentNumber = getStudentNumber(req);
       const { month, amount, notes } = req.body;
 
       if (!month || !/^\d{4}-\d{2}$/.test(month)) {
@@ -101,7 +113,7 @@ export const budgetController = {
         return res.status(400).json({ success: false, error: 'Valid positive budget amount is required' });
       }
 
-      const updatedBudget = await db.budgets.upsert(month, parsedAmount, notes || '');
+      const updatedBudget = await db.budgets.upsert(month, parsedAmount, notes || '', studentNumber);
       return res.json({
         success: true,
         message: 'Budget updated successfully',
@@ -113,4 +125,5 @@ export const budgetController = {
     }
   },
 };
+
 

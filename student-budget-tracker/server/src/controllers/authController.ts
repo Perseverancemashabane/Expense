@@ -244,16 +244,22 @@ export const authController = {
 
       const fullResetLink = `${clientBase.replace(/\/$/, '')}/login?mode=reset&token=${resetCode}&student=${student.student_number}`;
 
-      // Dispatch real email via emailService if email delivery selected
+      // Dispatch real email via emailService with a 2.5s race limit so user response is always immediate
       let emailDispatchResult: { sent: boolean; message?: string; error?: string } = { sent: false };
       if (deliveryMethod !== 'sms') {
-        emailDispatchResult = await sendPasswordResetEmail({
+        const emailPromise = sendPasswordResetEmail({
           to: rawEmail,
           studentName: student.name,
           studentNumber: student.student_number,
           resetCode,
           resetLink: fullResetLink,
         });
+
+        const quickTimeout = new Promise<{ sent: boolean; message: string }>((resolve) =>
+          setTimeout(() => resolve({ sent: false, message: 'Email dispatch initiated in background' }), 2500)
+        );
+
+        emailDispatchResult = await Promise.race([emailPromise, quickTimeout]);
       }
 
       const dispatchMsg = emailDispatchResult.sent

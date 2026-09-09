@@ -194,7 +194,7 @@ function shouldUseLiveBackend(): boolean {
 }
 
 // Fetch with automatic timeout so mobile/remote devices don't hang
-async function safeFetch(url: string, options: RequestInit = {}, timeoutMs = 15000) {
+async function safeFetch(url: string, options: RequestInit = {}, timeoutMs = 35000) {
   if (!shouldUseLiveBackend()) {
     throw new Error('Insecure HTTP backend blocked under HTTPS context. Using client storage.');
   }
@@ -209,8 +209,11 @@ async function safeFetch(url: string, options: RequestInit = {}, timeoutMs = 150
     const res = await fetch(url, { ...options, headers, signal: controller.signal });
     clearTimeout(id);
     return res;
-  } catch (err) {
+  } catch (err: any) {
     clearTimeout(id);
+    if (err?.name === 'AbortError' || err?.message?.includes('aborted') || err?.message?.includes('abort')) {
+      throw new Error('Connection timed out while waiting for server response. Please try again.');
+    }
     console.warn('Live API request failed for', url, err);
     throw err;
   }
@@ -581,13 +584,22 @@ export async function requestPasswordReset(identifier: string, deliveryMethod: '
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ identifier, deliveryMethod }),
-    });
+    }, 35000);
     if (res.ok) {
       return await res.json();
     }
     const errData = await res.json().catch(() => ({}));
     return { success: false, error: errData.error || 'Password reset request failed' };
   } catch (err: any) {
+    const isTimeout =
+      err?.message?.toLowerCase().includes('timed out') ||
+      err?.message?.toLowerCase().includes('abort');
+    if (isTimeout) {
+      return {
+        success: false,
+        error: 'The server was waking up from sleep. Please click "Send Reset Link & Code" once more.',
+      };
+    }
     return { success: false, error: err.message || 'Server unreachable' };
   }
 }

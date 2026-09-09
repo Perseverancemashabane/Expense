@@ -37,15 +37,32 @@ export async function sendPasswordResetEmail({
   }
 
   try {
-    const transporter = nodemailer.createTransport({
-      host: smtpHost,
-      port: smtpPort,
-      secure: smtpPort === 465,
-      auth: {
-        user: smtpUser,
-        pass: smtpPass,
-      },
-    });
+    const isGmail = smtpUser.toLowerCase().includes('@gmail.com');
+    const transportOptions: any = isGmail
+      ? {
+          service: 'gmail',
+          auth: {
+            user: smtpUser,
+            pass: smtpPass,
+          },
+          connectionTimeout: 6000,
+          greetingTimeout: 6000,
+          socketTimeout: 8000,
+        }
+      : {
+          host: smtpHost,
+          port: smtpPort,
+          secure: smtpPort === 465,
+          auth: {
+            user: smtpUser,
+            pass: smtpPass,
+          },
+          connectionTimeout: 6000,
+          greetingTimeout: 6000,
+          socketTimeout: 8000,
+        };
+
+    const transporter = nodemailer.createTransport(transportOptions);
 
     const htmlContent = `
       <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background-color: #0f172a; color: #f8fafc; border-radius: 16px; overflow: hidden; border: 1px solid #334155;">

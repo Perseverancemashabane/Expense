@@ -107,8 +107,23 @@ function saveLocalStore(data: any) {
   }
 }
 
-// Fetch with automatic timeout so mobile devices don't hang trying to connect to localhost
+// Check if the current browser context can safely contact the backend
+function shouldUseLiveBackend(): boolean {
+  if (typeof window === 'undefined') return false;
+  // If loaded over HTTPS (such as on Vercel), Chrome strictly blocks insecure HTTP calls
+  // to localhost under Mixed Content & Private Network Access rules.
+  // Only attempt live API calls if API_BASE is HTTPS or if the site itself is on HTTP (localhost).
+  if (window.location.protocol === 'https:' && API_BASE.startsWith('http:')) {
+    return false;
+  }
+  return true;
+}
+
+// Fetch with automatic timeout so mobile/remote devices don't hang
 async function safeFetch(url: string, options: RequestInit = {}, timeoutMs = 2500) {
+  if (!shouldUseLiveBackend()) {
+    throw new Error('Insecure HTTP backend blocked under HTTPS context. Using client storage.');
+  }
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -123,8 +138,10 @@ async function safeFetch(url: string, options: RequestInit = {}, timeoutMs = 250
 
 export async function fetchBudgetSummary(month = '2026-09') {
   try {
-    const res = await safeFetch(`${API_BASE}/budget/current?month=${month}`, { cache: 'no-store' });
-    if (res.ok) return await res.json();
+    if (shouldUseLiveBackend()) {
+      const res = await safeFetch(`${API_BASE}/budget/current?month=${month}`, { cache: 'no-store' });
+      if (res.ok) return await res.json();
+    }
   } catch (err) {
     console.info('Backend unreachable, using client offline storage:', err);
   }
@@ -401,7 +418,7 @@ export async function fetchAnalyticsSummary(month = '2026-09') {
     recentExpenses: expenses.slice(0, 5),
   };
 
-  return analytics;
+  return { success: true, ...analytics };
 }
 
 export async function resetDatabase() {

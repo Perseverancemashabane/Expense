@@ -244,7 +244,7 @@ export const authController = {
     try {
       const { identifier } = req.body;
       if (!identifier) {
-        return res.status(400).json({ success: false, error: 'Student number, email, or WhatsApp number is required' });
+        return res.status(400).json({ success: false, error: 'WhatsApp number or student number is required' });
       }
 
       const cleanId = String(identifier).trim();
@@ -273,7 +273,7 @@ export const authController = {
       if (!student) {
         return res.status(404).json({
           success: false,
-          error: `No account found for "${cleanId}". Please verify your student number, email, or phone number.`,
+          error: `No account found for "${cleanId}". Please verify your WhatsApp number or student number.`,
         });
       }
 

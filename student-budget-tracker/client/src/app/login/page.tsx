@@ -201,7 +201,7 @@ function LoginContent() {
     setForgotResult(null);
 
     if (!forgotId.trim()) {
-      setError('Please provide your TUT student number, email, or WhatsApp number.');
+      setError('Please provide your WhatsApp number or TUT student number.');
       return;
     }
 
@@ -251,7 +251,7 @@ function LoginContent() {
       return;
     }
     if (!resetToken.trim()) {
-      setError('Please enter the 6-digit reset code received via email or SMS.');
+      setError('Please enter the 6-digit reset code received on WhatsApp.');
       return;
     }
     if (!resetNewPassword || resetNewPassword.trim().length < 4) {
@@ -429,7 +429,7 @@ function LoginContent() {
                   htmlFor="student-identifier"
                   className="block text-xs font-semibold text-slate-300 mb-1"
                 >
-                  Student Number, Email, or WhatsApp Number
+                  Student Number or WhatsApp Number
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
@@ -441,7 +441,7 @@ function LoginContent() {
                     type="text"
                     autoComplete="username"
                     required
-                    placeholder="e.g. 230099774, email, or 082 123 4567"
+                    placeholder="e.g. 230099774 or 082 123 4567"
                     value={identifier}
                     onChange={(e) => setIdentifier(e.target.value)}
                     className="w-full pl-9 pr-4 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
@@ -582,40 +582,23 @@ function LoginContent() {
                     className="block text-xs font-semibold text-slate-300 flex items-center gap-1.5"
                   >
                     <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>WhatsApp / Phone Number</span>
+                    <span>WhatsApp Number</span>
                   </label>
-                  <span className="text-3xs text-emerald-400 font-medium">Used for Password Reset</span>
+                  <span className="text-3xs text-emerald-400 font-medium">For Password Reset Links</span>
                 </div>
                 <input
                   id="reg-phone"
                   type="tel"
                   autoComplete="tel"
+                  required
                   placeholder="e.g. 082 123 4567 or +27 82 123 4567"
                   value={regPhone}
                   onChange={(e) => setRegPhone(e.target.value)}
                   className="w-full px-3.5 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
                 />
                 <p className="text-3xs text-slate-400 mt-1">
-                  You can use your WhatsApp number to log in and receive instant password reset links.
+                  Your password reset links will be sent directly to this WhatsApp number.
                 </p>
-              </div>
-
-              <div>
-                <label
-                  htmlFor="reg-email"
-                  className="block text-xs font-semibold text-slate-300 mb-1"
-                >
-                  University Email
-                </label>
-                <input
-                  id="reg-email"
-                  type="email"
-                  autoComplete="email"
-                  placeholder="student@tut4life.ac.za"
-                  value={regEmail}
-                  onChange={(e) => setRegEmail(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
-                />
               </div>
 
               <div>
@@ -719,7 +702,7 @@ function LoginContent() {
                   Reset Password via WhatsApp
                 </h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  Enter your registered Student Number, Email, or WhatsApp Number. We will generate your secure reset link and send it directly to your WhatsApp.
+                  Enter your registered WhatsApp Number or Student Number. We will generate your secure reset link and send it directly to your WhatsApp.
                 </p>
               </div>
 
@@ -729,17 +712,17 @@ function LoginContent() {
                     htmlFor="forgot-id"
                     className="block text-xs font-semibold text-slate-300 mb-1"
                   >
-                    Student Number, Email, or WhatsApp Number
+                    WhatsApp Number or Student Number
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
-                      <User className="w-4 h-4" />
+                      <Phone className="w-4 h-4" />
                     </div>
                     <input
                       id="forgot-id"
                       type="text"
                       required
-                      placeholder="e.g. 082 123 4567, 230099774, or email"
+                      placeholder="e.g. 082 123 4567 or 230099774"
                       value={forgotId}
                       onChange={(e) => setForgotId(e.target.value)}
                       className="w-full pl-9 pr-4 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"

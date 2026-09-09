@@ -766,31 +766,35 @@ function LoginContent() {
                     <span>Reset Notification Dispatched</span>
                   </div>
                   <p className="text-2xs text-slate-300 leading-relaxed">
-                    A reset link has been dispatched to{' '}
+                    A reset verification request was processed for{' '}
                     <strong className="text-white">{forgotResult.maskedContact}</strong>.
-                    You can enter the verification token or use the 1-click button below.
                   </p>
                   {forgotResult.token && (
-                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900/90 border border-slate-700">
-                      <div>
-                        <span className="text-3xs uppercase tracking-wider text-slate-400 font-bold block">
-                          Verification Code
-                        </span>
-                        <span className="text-base font-mono font-black text-emerald-400 tracking-widest">
-                          {forgotResult.token}
-                        </span>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between p-3 rounded-xl bg-slate-900/90 border border-slate-700">
+                        <div>
+                          <span className="text-3xs uppercase tracking-wider text-slate-400 font-bold block">
+                            6-Digit Verification Code
+                          </span>
+                          <span className="text-lg font-mono font-black text-emerald-400 tracking-widest">
+                            {forgotResult.token}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTab('reset');
+                            setError('');
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition cursor-pointer shadow-sm"
+                        >
+                          <span>Enter Code Now</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setTab('reset');
-                          setError('');
-                        }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition cursor-pointer"
-                      >
-                        <span>Enter Code Now</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
+                      <p className="text-3xs text-slate-400 leading-normal">
+                        💡 <em>Tip: To deliver automated emails directly into your external Gmail/Outlook inbox, configure SMTP credentials on your server. You can click &quot;Enter Code Now&quot; above to set your new password immediately!</em>
+                      </p>
                     </div>
                   )}
                 </div>

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { db } from '../config/db';
+import { sendPasswordResetEmail } from '../services/emailService';
 
 const DEMO_STUDENT = {
   id: 'tut-230099774',
@@ -233,16 +234,41 @@ export const authController = {
       const masked = deliveryMethod === 'sms' ? maskedPhone : maskedEmail;
       const deliveryLabel = deliveryMethod === 'sms' ? 'SMS' : 'University Email';
 
-      const resetLink = `/login?mode=reset&token=${resetCode}&student=${student.student_number}`;
+      // Full reset URL for direct email clicks
+      const clientBase =
+        process.env.CLIENT_URL && !process.env.CLIENT_URL.includes('localhost')
+          ? process.env.CLIENT_URL
+          : (process.env.NODE_ENV === 'production'
+              ? 'https://expense-xi-two.vercel.app'
+              : (process.env.CLIENT_URL || 'https://expense-xi-two.vercel.app'));
+
+      const fullResetLink = `${clientBase.replace(/\/$/, '')}/login?mode=reset&token=${resetCode}&student=${student.student_number}`;
+
+      // Dispatch real email via emailService if email delivery selected
+      let emailDispatchResult: { sent: boolean; message?: string; error?: string } = { sent: false };
+      if (deliveryMethod !== 'sms') {
+        emailDispatchResult = await sendPasswordResetEmail({
+          to: rawEmail,
+          studentName: student.name,
+          studentNumber: student.student_number,
+          resetCode,
+          resetLink: fullResetLink,
+        });
+      }
+
+      const dispatchMsg = emailDispatchResult.sent
+        ? `Password reset link successfully sent to your email (${masked})! Please check your inbox and spam folder.`
+        : `Password reset code (${resetCode}) generated for ${masked}! Click the button below to reset immediately, or configure SMTP credentials in server/.env for automated inbox delivery.`;
 
       return res.json({
         success: true,
-        message: `Password reset link dispatched via ${deliveryLabel} to ${masked}!`,
+        message: dispatchMsg,
+        emailSent: emailDispatchResult.sent,
         studentNumber: student.student_number,
         maskedContact: masked,
         deliveryMethod: deliveryMethod || 'email',
         token: resetCode,
-        resetLink,
+        resetLink: fullResetLink,
         expiresIn: '60 minutes',
       });
     } catch (err: any) {

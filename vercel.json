@@ -1,6 +1,4 @@
 {
   "buildCommand": "cd student-budget-tracker/client && npm install && npm run build",
-  "outputDirectory": "student-budget-tracker/client/.next",
-  "framework": "nextjs"
+  "outputDirectory": "student-budget-tracker/client/.next"
 }
-

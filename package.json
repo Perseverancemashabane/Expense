@@ -1,0 +1,11 @@
+{
+  "name": "expense-tracker-root",
+  "version": "1.0.0",
+  "description": "Student Budget and Expense Tracker Root Orchestrator",
+  "scripts": {
+    "dev": "npm run dev --prefix student-budget-tracker",
+    "build": "npm run build --prefix student-budget-tracker",
+    "seed": "npm run seed --prefix student-budget-tracker"
+  }
+}
+

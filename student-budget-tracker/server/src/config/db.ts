@@ -1,0 +1,507 @@
+import { Pool, QueryResult, QueryResultRow } from 'pg';
+import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
+
+dotenv.config();
+
+const connectionString = process.env.DATABASE_URL;
+const isProduction = process.env.NODE_ENV === 'production';
+
+export let isUsingPostgres = false;
+let pool: Pool | null = null;
+
+// Local fallback data storage file path
+const DATA_DIR = path.join(__dirname, '../../.data');
+const DATA_FILE = path.join(DATA_DIR, 'db_fallback.json');
+
+// Initial default seed state for fallback mode
+const DEFAULT_FALLBACK_DATA = {
+  budgets: [
+    {
+      id: 1,
+      month: '2026-09',
+      amount: 3500.0,
+      notes: 'Monthly NSFAS Student Allowance & Family Support',
+      created_at: new Date('2026-09-01T08:00:00Z').toISOString(),
+      updated_at: new Date('2026-09-01T08:00:00Z').toISOString(),
+    },
+  ],
+  categories: [
+    { id: 1, name: 'Food & Groceries', icon: 'Utensils', color: '#10B981', allocated_budget: 1200.0 },
+    { id: 2, name: 'Transport & Taxi', icon: 'Bus', color: '#3B82F6', allocated_budget: 650.0 },
+    { id: 3, name: 'Books & Stationery', icon: 'BookOpen', color: '#8B5CF6', allocated_budget: 450.0 },
+    { id: 4, name: 'Airtime & Data Bundles', icon: 'Smartphone', color: '#F59E0B', allocated_budget: 300.0 },
+    { id: 5, name: 'Personal Care & Toiletries', icon: 'Sparkles', color: '#EC4899', allocated_budget: 350.0 },
+    { id: 6, name: 'Rent & Accommodation', icon: 'Home', color: '#6366F1', allocated_budget: 0.0 },
+    { id: 7, name: 'Entertainment & Social', icon: 'Coffee', color: '#14B8A6', allocated_budget: 350.0 },
+    { id: 8, name: 'Emergency & Other', icon: 'HelpCircle', color: '#64748B', allocated_budget: 200.0 },
+  ],
+  expenses: [
+    {
+      id: 1,
+      title: 'Checkers Grocery Shopping (Month Start)',
+      amount: 485.5,
+      category_id: 1,
+      category_name: 'Food & Groceries',
+      date: '2026-09-01',
+      notes: 'Maize meal, milk, eggs, rice, canned beans, bread',
+      payment_method: 'Debit Card',
+      created_at: new Date('2026-09-01T14:30:00Z').toISOString(),
+      updated_at: new Date('2026-09-01T14:30:00Z').toISOString(),
+    },
+    {
+      id: 2,
+      title: 'Minibus Taxi to TUT Campus',
+      amount: 30.0,
+      category_id: 2,
+      category_name: 'Transport & Taxi',
+      date: '2026-09-02',
+      notes: 'Soshanguve to Pretoria Central return fare',
+      payment_method: 'Cash',
+      created_at: new Date('2026-09-02T07:15:00Z').toISOString(),
+      updated_at: new Date('2026-09-02T07:15:00Z').toISOString(),
+    },
+    {
+      id: 3,
+      title: 'MTN 15GB Student Night Express & Day Data',
+      amount: 149.0,
+      category_id: 4,
+      category_name: 'Airtime & Data Bundles',
+      date: '2026-09-03',
+      notes: 'For online lectures and lab downloads',
+      payment_method: 'EFT',
+      created_at: new Date('2026-09-03T10:00:00Z').toISOString(),
+      updated_at: new Date('2026-09-03T10:00:00Z').toISOString(),
+    },
+    {
+      id: 4,
+      title: 'Computer Systems Engineering Lab Printing',
+      amount: 75.0,
+      category_id: 3,
+      category_name: 'Books & Stationery',
+      date: '2026-09-04',
+      notes: 'PJD301B design proposal drafts & schematics',
+      payment_method: 'Campus Card',
+      created_at: new Date('2026-09-04T12:45:00Z').toISOString(),
+      updated_at: new Date('2026-09-04T12:45:00Z').toISOString(),
+    },
+    {
+      id: 5,
+      title: 'Campus Cafeteria Lunch (Quarter Chicken & Pap)',
+      amount: 55.0,
+      category_id: 1,
+      category_name: 'Food & Groceries',
+      date: '2026-09-06',
+      notes: 'Student center lunch with study group',
+      payment_method: 'Cash',
+      created_at: new Date('2026-09-06T13:20:00Z').toISOString(),
+      updated_at: new Date('2026-09-06T13:20:00Z').toISOString(),
+    },
+    {
+      id: 6,
+      title: 'Clicks Pharmacy Toiletries & Soap',
+      amount: 120.0,
+      category_id: 5,
+      category_name: 'Personal Care & Toiletries',
+      date: '2026-09-07',
+      notes: 'Bath soap, toothpaste, deodorant',
+      payment_method: 'Debit Card',
+      created_at: new Date('2026-09-07T16:10:00Z').toISOString(),
+      updated_at: new Date('2026-09-07T16:10:00Z').toISOString(),
+    },
+  ],
+};
+
+function getLocalData() {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    if (!fs.existsSync(DATA_FILE)) {
+      fs.writeFileSync(DATA_FILE, JSON.stringify(DEFAULT_FALLBACK_DATA, null, 2), 'utf-8');
+      return JSON.parse(JSON.stringify(DEFAULT_FALLBACK_DATA));
+    }
+    const raw = fs.readFileSync(DATA_FILE, 'utf-8');
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error('Error reading local fallback file, using in-memory state:', err);
+    return DEFAULT_FALLBACK_DATA;
+  }
+}
+
+function saveLocalData(data: typeof DEFAULT_FALLBACK_DATA) {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Error writing to local fallback file:', err);
+  }
+}
+
+export function initDatabase() {
+  if (connectionString) {
+    try {
+      const isCloudDb = connectionString.includes('neon.tech') || connectionString.includes('render.com');
+      pool = new Pool({
+        connectionString,
+        ssl: isCloudDb || isProduction ? { rejectUnauthorized: false } : undefined,
+        connectionTimeoutMillis: 5000,
+      });
+
+      pool.on('error', (err) => {
+        console.error('Unexpected error on idle PostgreSQL client:', err.message);
+      });
+    } catch (e: any) {
+      console.warn('Failed to initialize PostgreSQL pool:', e.message);
+    }
+  }
+}
+
+export async function testConnection(): Promise<{ connected: boolean; message: string; mode: string }> {
+  if (!pool) {
+    initDatabase();
+  }
+
+  if (pool) {
+    try {
+      const client = await pool.connect();
+      const res = await client.query('SELECT NOW() as now');
+      client.release();
+      isUsingPostgres = true;
+      return {
+        connected: true,
+        message: `Connected to PostgreSQL database at ${res.rows[0].now}`,
+        mode: 'PostgreSQL',
+      };
+    } catch (err: any) {
+      isUsingPostgres = false;
+      return {
+        connected: false,
+        message: `PostgreSQL connection failed: ${err.message}. Operating in resilient local storage mode.`,
+        mode: 'Local File / Memory Store',
+      };
+    }
+  }
+
+  isUsingPostgres = false;
+  return {
+    connected: false,
+    message: 'DATABASE_URL not configured. Operating in resilient local storage mode.',
+    mode: 'Local File / Memory Store',
+  };
+}
+
+export const db = {
+  // Direct query runner for PostgreSQL
+  async query<T extends QueryResultRow = any>(text: string, params?: any[]): Promise<QueryResult<T>> {
+    if (pool && isUsingPostgres) {
+      return pool.query<T>(text, params);
+    }
+    throw new Error('PostgreSQL is not active. Use repository methods for persistent operations.');
+  },
+
+  getPool(): Pool | null {
+    return pool;
+  },
+
+  // Storage Repository for Budgets
+  budgets: {
+    async getByMonth(month: string) {
+      if (pool && isUsingPostgres) {
+        const res = await pool.query('SELECT * FROM budgets WHERE month = $1', [month]);
+        return res.rows[0] || null;
+      }
+      const data = getLocalData();
+      return data.budgets.find((b: any) => b.month === month) || null;
+    },
+
+    async upsert(month: string, amount: number, notes: string = '') {
+      if (pool && isUsingPostgres) {
+        const query = `
+          INSERT INTO budgets (month, amount, notes, updated_at)
+          VALUES ($1, $2, $3, NOW())
+          ON CONFLICT (month)
+          DO UPDATE SET amount = EXCLUDED.amount, notes = EXCLUDED.notes, updated_at = NOW()
+          RETURNING *;
+        `;
+        const res = await pool.query(query, [month, amount, notes]);
+        return res.rows[0];
+      }
+      const data = getLocalData();
+      const existingIndex = data.budgets.findIndex((b: any) => b.month === month);
+      const now = new Date().toISOString();
+      if (existingIndex >= 0) {
+        data.budgets[existingIndex].amount = Number(amount);
+        data.budgets[existingIndex].notes = notes;
+        data.budgets[existingIndex].updated_at = now;
+        saveLocalData(data);
+        return data.budgets[existingIndex];
+      } else {
+        const newBudget = {
+          id: data.budgets.length > 0 ? Math.max(...data.budgets.map((b: any) => b.id)) + 1 : 1,
+          month,
+          amount: Number(amount),
+          notes,
+          created_at: now,
+          updated_at: now,
+        };
+        data.budgets.push(newBudget);
+        saveLocalData(data);
+        return newBudget;
+      }
+    },
+  },
+
+  // Storage Repository for Categories
+  categories: {
+    async getAll() {
+      if (pool && isUsingPostgres) {
+        const res = await pool.query('SELECT * FROM categories ORDER BY id ASC');
+        return res.rows;
+      }
+      const data = getLocalData();
+      return data.categories;
+    },
+
+    async getById(id: number) {
+      if (pool && isUsingPostgres) {
+        const res = await pool.query('SELECT * FROM categories WHERE id = $1', [id]);
+        return res.rows[0] || null;
+      }
+      const data = getLocalData();
+      return data.categories.find((c: any) => c.id === id) || null;
+    },
+  },
+
+  // Storage Repository for Expenses
+  expenses: {
+    async getAll(filters: {
+      category?: string;
+      startDate?: string;
+      endDate?: string;
+      search?: string;
+      sortBy?: string;
+      sortOrder?: 'asc' | 'desc';
+    } = {}) {
+      if (pool && isUsingPostgres) {
+        let query = 'SELECT * FROM expenses WHERE 1=1';
+        const params: any[] = [];
+        let paramIndex = 1;
+
+        if (filters.category && filters.category !== 'All') {
+          query += ` AND category_name = $${paramIndex++}`;
+          params.push(filters.category);
+        }
+        if (filters.startDate) {
+          query += ` AND date >= $${paramIndex++}`;
+          params.push(filters.startDate);
+        }
+        if (filters.endDate) {
+          query += ` AND date <= $${paramIndex++}`;
+          params.push(filters.endDate);
+        }
+        if (filters.search) {
+          query += ` AND (LOWER(title) LIKE $${paramIndex} OR LOWER(COALESCE(notes, '')) LIKE $${paramIndex})`;
+          params.push(`%${filters.search.toLowerCase()}%`);
+          paramIndex++;
+        }
+
+        const sortBy = ['date', 'amount', 'title'].includes(filters.sortBy || '') ? filters.sortBy : 'date';
+        const sortOrder = (filters.sortOrder || 'desc').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+        query += ` ORDER BY ${sortBy} ${sortOrder}, id DESC`;
+
+        const res = await pool.query(query, params);
+        return res.rows;
+      }
+
+      const data = getLocalData();
+      let results = [...data.expenses];
+
+      if (filters.category && filters.category !== 'All') {
+        results = results.filter((e: any) => e.category_name.toLowerCase() === filters.category!.toLowerCase());
+      }
+      if (filters.startDate) {
+        results = results.filter((e: any) => e.date >= filters.startDate!);
+      }
+      if (filters.endDate) {
+        results = results.filter((e: any) => e.date <= filters.endDate!);
+      }
+      if (filters.search) {
+        const s = filters.search.toLowerCase();
+        results = results.filter((e: any) => e.title.toLowerCase().includes(s) || (e.notes && e.notes.toLowerCase().includes(s)));
+      }
+
+      const sortBy = filters.sortBy || 'date';
+      const isAsc = filters.sortOrder === 'asc';
+
+      results.sort((a: any, b: any) => {
+        if (sortBy === 'amount') {
+          return isAsc ? a.amount - b.amount : b.amount - a.amount;
+        }
+        if (sortBy === 'title') {
+          return isAsc ? a.title.localeCompare(b.title) : b.title.localeCompare(a.title);
+        }
+        // default by date
+        const dateCompare = a.date.localeCompare(b.date);
+        if (dateCompare !== 0) return isAsc ? dateCompare : -dateCompare;
+        return isAsc ? a.id - b.id : b.id - a.id;
+      });
+
+      return results;
+    },
+
+    async getById(id: number) {
+      if (pool && isUsingPostgres) {
+        const res = await pool.query('SELECT * FROM expenses WHERE id = $1', [id]);
+        return res.rows[0] || null;
+      }
+      const data = getLocalData();
+      return data.expenses.find((e: any) => e.id === id) || null;
+    },
+
+    async create(expense: {
+      title: string;
+      amount: number;
+      category_id?: number | null;
+      category_name: string;
+      date: string;
+      notes?: string;
+      payment_method?: string;
+    }) {
+      if (pool && isUsingPostgres) {
+        const query = `
+          INSERT INTO expenses (title, amount, category_id, category_name, date, notes, payment_method, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+          RETURNING *;
+        `;
+        const res = await pool.query(query, [
+          expense.title,
+          expense.amount,
+          expense.category_id || null,
+          expense.category_name,
+          expense.date,
+          expense.notes || '',
+          expense.payment_method || 'Cash',
+        ]);
+        return res.rows[0];
+      }
+
+      const data = getLocalData();
+      const newId = data.expenses.length > 0 ? Math.max(...data.expenses.map((e: any) => e.id)) + 1 : 1;
+      const now = new Date().toISOString();
+      const newExpense = {
+        id: newId,
+        title: expense.title,
+        amount: Number(expense.amount),
+        category_id: expense.category_id || null,
+        category_name: expense.category_name,
+        date: expense.date,
+        notes: expense.notes || '',
+        payment_method: expense.payment_method || 'Cash',
+        created_at: now,
+        updated_at: now,
+      };
+      data.expenses.push(newExpense);
+      saveLocalData(data);
+      return newExpense;
+    },
+
+    async update(id: number, fields: Partial<{
+      title: string;
+      amount: number;
+      category_id?: number | null;
+      category_name: string;
+      date: string;
+      notes?: string;
+      payment_method?: string;
+    }>) {
+      if (pool && isUsingPostgres) {
+        const setClauses: string[] = [];
+        const params: any[] = [];
+        let idx = 1;
+
+        if (fields.title !== undefined) {
+          setClauses.push(`title = $${idx++}`);
+          params.push(fields.title);
+        }
+        if (fields.amount !== undefined) {
+          setClauses.push(`amount = $${idx++}`);
+          params.push(fields.amount);
+        }
+        if (fields.category_id !== undefined) {
+          setClauses.push(`category_id = $${idx++}`);
+          params.push(fields.category_id);
+        }
+        if (fields.category_name !== undefined) {
+          setClauses.push(`category_name = $${idx++}`);
+          params.push(fields.category_name);
+        }
+        if (fields.date !== undefined) {
+          setClauses.push(`date = $${idx++}`);
+          params.push(fields.date);
+        }
+        if (fields.notes !== undefined) {
+          setClauses.push(`notes = $${idx++}`);
+          params.push(fields.notes);
+        }
+        if (fields.payment_method !== undefined) {
+          setClauses.push(`payment_method = $${idx++}`);
+          params.push(fields.payment_method);
+        }
+
+        setClauses.push(`updated_at = NOW()`);
+        params.push(id);
+
+        const query = `
+          UPDATE expenses
+          SET ${setClauses.join(', ')}
+          WHERE id = $${idx}
+          RETURNING *;
+        `;
+        const res = await pool.query(query, params);
+        return res.rows[0] || null;
+      }
+
+      const data = getLocalData();
+      const itemIndex = data.expenses.findIndex((e: any) => e.id === id);
+      if (itemIndex === -1) return null;
+
+      const updated = {
+        ...data.expenses[itemIndex],
+        ...fields,
+        amount: fields.amount !== undefined ? Number(fields.amount) : data.expenses[itemIndex].amount,
+        updated_at: new Date().toISOString(),
+      };
+      data.expenses[itemIndex] = updated;
+      saveLocalData(data);
+      return updated;
+    },
+
+    async delete(id: number) {
+      if (pool && isUsingPostgres) {
+        const res = await pool.query('DELETE FROM expenses WHERE id = $1 RETURNING *', [id]);
+        return (res.rowCount ?? 0) > 0;
+      }
+
+      const data = getLocalData();
+      const initialLen = data.expenses.length;
+      data.expenses = data.expenses.filter((e: any) => e.id !== id);
+      const deleted = data.expenses.length < initialLen;
+      if (deleted) {
+        saveLocalData(data);
+      }
+      return deleted;
+    },
+
+    async resetToDefault() {
+      saveLocalData(DEFAULT_FALLBACK_DATA);
+      return true;
+    }
+  },
+};
+
+// Auto-initialize on import
+initDatabase();

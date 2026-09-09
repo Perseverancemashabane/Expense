@@ -1,0 +1,32 @@
+{
+  "name": "student-budget-and-expense-tracker-monorepo",
+  "version": "1.0.0",
+  "description": "Student Budget and Expense Tracker - Full-stack Monorepo with Next.js and Express.js",
+  "private": true,
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "dev": "node run-dev.js",
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "build:server": "npm run build --prefix server",
+    "build:client": "npm run build --prefix client",
+    "build": "npm run build --prefix server && npm run build --prefix client",
+    "seed": "npm run seed --prefix server",
+    "migrate": "npm run migrate --prefix server"
+  },
+  "keywords": [
+    "student-budget",
+    "expense-tracker",
+    "nextjs",
+    "express",
+    "postgresql",
+    "south-africa",
+    "zar"
+  ],
+  "author": "Naledi Perseverance Mashabane (TUT)",
+  "license": "MIT"
+}
+

@@ -84,6 +84,14 @@ export async function runSeed() {
       notes: '3 trips to campus and lab sessions',
       payment_method: 'Cash',
     },
+    {
+      title: 'NuMetro',
+      amount: 400.0,
+      category_name: 'Entertainment & Social',
+      date: '2026-09-09',
+      notes: 'Solo date',
+      payment_method: 'Cash',
+    },
   ];
 
   if (isUsingPostgres) {
@@ -94,39 +102,64 @@ export async function runSeed() {
     try {
       await client.query('BEGIN');
 
-      // Clear existing records for clean seed
-      await client.query('TRUNCATE TABLE expenses, categories, budgets RESTART IDENTITY CASCADE;');
+      // 1. Ensure Naledi student account exists
+      await client.query(`
+        INSERT INTO students (name, student_number, email, password_pin, monthly_allowance)
+        VALUES ('Naledi Perseverance Mashabane', '230099774', '230099774@tut4life.ac.za', '1234', 3500.00)
+        ON CONFLICT (student_number) DO NOTHING;
+      `);
 
-      // 1. Insert Categories
-      for (const cat of categories) {
-        await client.query(
-          `INSERT INTO categories (name, icon, color, allocated_budget) VALUES ($1, $2, $3, $4)`,
-          [cat.name, cat.icon, cat.color, cat.allocated_budget]
-        );
+      // 2. Insert Categories (if not already populated)
+      const catCountRes = await client.query('SELECT COUNT(*) FROM categories');
+      if (parseInt(catCountRes.rows[0].count, 10) === 0) {
+        for (const cat of categories) {
+          await client.query(
+            `INSERT INTO categories (name, icon, color, allocated_budget) VALUES ($1, $2, $3, $4)`,
+            [cat.name, cat.icon, cat.color, cat.allocated_budget]
+          );
+        }
       }
 
-      // 2. Insert Default Budget for September 2026
+      // 3. Upsert Default Budget for Naledi for September 2026
       await client.query(
-        `INSERT INTO budgets (month, amount, notes) VALUES ($1, $2, $3)`,
-        ['2026-09', 3500.0, 'Monthly NSFAS Student Allowance & Family Support']
+        `INSERT INTO budgets (student_number, month, amount, notes)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (student_number, month) DO UPDATE SET amount = EXCLUDED.amount, notes = EXCLUDED.notes`,
+        ['230099774', '2026-09', 3500.0, 'Monthly NSFAS Student Allowance & Family Support']
       );
 
       // Fetch category ID mapping
       const catRes = await client.query('SELECT id, name FROM categories');
       const catMap = new Map(catRes.rows.map((r) => [r.name, r.id]));
 
-      // 3. Insert Expenses
-      for (const exp of expenses) {
-        const catId = catMap.get(exp.category_name) || null;
-        await client.query(
-          `INSERT INTO expenses (title, amount, category_id, category_name, date, notes, payment_method)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [exp.title, exp.amount, catId, exp.category_name, exp.date, exp.notes, exp.payment_method]
+      // 4. Seed Naledi's sample expenses (including NuMetro) if not already added
+      const nalediExpRes = await client.query("SELECT COUNT(*) FROM expenses WHERE student_number = '230099774'");
+      if (parseInt(nalediExpRes.rows[0].count, 10) === 0) {
+        for (const exp of expenses) {
+          const catId = catMap.get(exp.category_name) || null;
+          await client.query(
+            `INSERT INTO expenses (student_number, title, amount, category_id, category_name, date, notes, payment_method)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+            ['230099774', exp.title, exp.amount, catId, exp.category_name, exp.date, exp.notes, exp.payment_method]
+          );
+        }
+      } else {
+        // Ensure NuMetro is present for Naledi
+        const nuMetroCheck = await client.query(
+          "SELECT id FROM expenses WHERE student_number = '230099774' AND LOWER(title) = 'numetro'"
         );
+        if (nuMetroCheck.rows.length === 0) {
+          const catId = catMap.get('Entertainment & Social') || null;
+          await client.query(
+            `INSERT INTO expenses (student_number, title, amount, category_id, category_name, date, notes, payment_method)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+            ['230099774', 'NuMetro', 400.0, catId, 'Entertainment & Social', '2026-09-09', 'Solo date', 'Cash']
+          );
+        }
       }
 
       await client.query('COMMIT');
-      console.log('✅ PostgreSQL database seeded successfully with student budget and expenses!');
+      console.log('✅ PostgreSQL database seeded successfully without overwriting student data!');
     } catch (err: any) {
       await client.query('ROLLBACK');
       console.error('❌ Seeding error:', err.message);

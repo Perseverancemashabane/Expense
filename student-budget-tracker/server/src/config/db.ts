@@ -222,7 +222,7 @@ export const db = {
           INSERT INTO students (name, student_number, email, password_pin, monthly_allowance, created_at, updated_at)
           VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
           ON CONFLICT (student_number)
-          DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email, updated_at = NOW()
+          DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email, password_pin = EXCLUDED.password_pin, monthly_allowance = EXCLUDED.monthly_allowance, updated_at = NOW()
           RETURNING *;
         `;
         const res = await pool.query(query, [
@@ -242,6 +242,8 @@ export const db = {
       if (existing) {
         existing.name = student.name.trim();
         existing.email = student.email.trim().toLowerCase();
+        existing.password_pin = student.password_pin || existing.password_pin || '1234';
+        existing.monthly_allowance = allowance;
         existing.updated_at = now;
         saveLocalData(data);
         return existing;

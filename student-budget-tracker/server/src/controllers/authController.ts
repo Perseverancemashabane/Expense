@@ -23,6 +23,11 @@ export const authController = {
 
       const cleanId = String(username).trim();
       const cleanIdLower = cleanId.toLowerCase();
+      const enteredPassword = password !== undefined && password !== null ? String(password).trim() : '';
+
+      if (!enteredPassword) {
+        return res.status(400).json({ success: false, error: 'Password or PIN is required to sign in' });
+      }
 
       // 1. Check database for registered student
       let student = await db.students.findByStudentNumber(cleanId);
@@ -31,11 +36,10 @@ export const authController = {
       }
 
       if (student) {
-        // Verify PIN / Password if supplied
-        const pin = student.password_pin || '1234';
-        const enteredPin = password ? String(password).trim() : '';
-        if (enteredPin && enteredPin !== pin && enteredPin !== '1234') {
-          return res.status(401).json({ success: false, error: 'Incorrect PIN. Try 1234 or your registered PIN.' });
+        // Strictly verify PIN / Password against student's chosen password
+        const expectedPin = String(student.password_pin || '1234').trim();
+        if (enteredPassword !== expectedPin) {
+          return res.status(401).json({ success: false, error: 'Incorrect password or PIN. Please try again.' });
         }
 
         const initials = String(student.name)
@@ -64,13 +68,17 @@ export const authController = {
         });
       }
 
-      // 2. Demo Student fallback for Naledi
+      // 2. Demo Student fallback for Naledi Mashabane (230099774)
       if (
         cleanIdLower === '230099774' ||
         cleanIdLower === 'naledimashabane001@gmail.com' ||
         cleanIdLower.includes('230099774') ||
         cleanIdLower === 'admin'
       ) {
+        if (enteredPassword !== '1234') {
+          return res.status(401).json({ success: false, error: 'Incorrect PIN for demo student (Default is 1234).' });
+        }
+
         // Ensure Naledi is recorded in DB
         await db.students.create({
           name: DEMO_STUDENT.name,
@@ -88,40 +96,10 @@ export const authController = {
         });
       }
 
-      // 3. If student number format provided, create student profile in database
-      const isEmail = cleanIdLower.includes('@');
-      const studentNum = isEmail ? cleanIdLower.split('@')[0] : cleanId;
-      const initials = studentNum.slice(0, 2).toUpperCase();
-      const email = isEmail ? cleanIdLower : `${studentNum}@tut4life.ac.za`;
-      const name = `Student ${studentNum}`;
-
-      const created = await db.students.create({
-        name,
-        student_number: studentNum,
-        email,
-        password_pin: password ? String(password).trim() : '1234',
-        monthly_allowance: 3500,
-      });
-
-      // Initialize default isolated budget for new student
-      await db.budgets.upsert('2026-09', 3500, 'Monthly allowance', studentNum);
-
-      const studentUser = {
-        id: `tut-${created.student_number}`,
-        name: created.name,
-        studentNumber: created.student_number,
-        email: created.email,
-        institution: 'Tshwane University of Technology',
-        department: 'Computer Systems Engineering',
-        monthlyAllowance: Number(created.monthly_allowance) || 3500,
-        avatarInitials: initials,
-      };
-
-      return res.json({
-        success: true,
-        message: 'Student authenticated successfully',
-        user: studentUser,
-        token: `tut-session-token-${studentNum}`,
+      // 3. Not registered
+      return res.status(404).json({
+        success: false,
+        error: `Account "${cleanId}" not found. Please click "Register New Student" to create your account and password.`,
       });
     } catch (err: any) {
       console.error('Login error:', err);
@@ -137,17 +115,22 @@ export const authController = {
         return res.status(400).json({ success: false, error: 'Full name and student number are required' });
       }
 
+      const cleanPassword = password !== undefined && password !== null ? String(password).trim() : '';
+      if (!cleanPassword || cleanPassword.length < 4) {
+        return res.status(400).json({ success: false, error: 'Please create a password of at least 4 characters.' });
+      }
+
       const cleanNum = String(studentNumber).trim();
       const cleanEmail = email ? String(email).trim().toLowerCase() : `${cleanNum}@tut4life.ac.za`;
       const cleanName = String(name).trim();
       const allowance = Number(monthlyAllowance) || 3500;
 
-      // 1. Create student in database
+      // 1. Create student in database with student's custom password
       const student = await db.students.create({
         name: cleanName,
         student_number: cleanNum,
         email: cleanEmail,
-        password_pin: password ? String(password).trim() : '1234',
+        password_pin: cleanPassword,
         monthly_allowance: allowance,
       });
 

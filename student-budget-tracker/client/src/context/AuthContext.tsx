@@ -68,6 +68,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem(STORAGE_KEY, JSON.stringify(apiRes.user));
         return { success: true };
       }
+      if (apiRes && apiRes.error) {
+        return { success: false, error: apiRes.error };
+      }
     } catch (apiErr) {
       console.warn('Live API sign-in attempted, falling back to client mode:', apiErr);
     }
@@ -79,6 +82,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       cleanId.includes('230099774') ||
       cleanId === 'admin'
     ) {
+      if (pinOrPassword && pinOrPassword !== '1234') {
+        return { success: false, error: 'Incorrect PIN. Demo student PIN is 1234.' };
+      }
       setUser(DEMO_STUDENT);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(DEMO_STUDENT));
       return { success: true };
@@ -87,12 +93,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // 3. Check custom registered students in localStorage
     try {
       const storedList = localStorage.getItem('tut_registered_students');
-      const registered: StudentUser[] = storedList ? JSON.parse(storedList) : [];
+      const registered: any[] = storedList ? JSON.parse(storedList) : [];
       const found = registered.find(
         (s) => s.studentNumber.toLowerCase() === cleanId || s.email.toLowerCase() === cleanId
       );
 
       if (found) {
+        if (found.password && pinOrPassword && pinOrPassword !== found.password) {
+          return { success: false, error: 'Incorrect password. Please try again.' };
+        }
         setUser(found);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(found));
         return { success: true };
@@ -101,28 +110,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.warn('Error reading registered students:', e);
     }
 
-    // 4. For academic evaluation: If a student number or valid email is provided, allow access with dynamic profile
-    if (/^\d{7,10}$/.test(cleanId) || cleanId.includes('@')) {
-      const isEmail = cleanId.includes('@');
-      const studentNum = isEmail ? cleanId.split('@')[0] : cleanId;
-      const dynamicUser: StudentUser = {
-        id: `tut-${studentNum}`,
-        name: `Student ${studentNum}`,
-        studentNumber: studentNum,
-        email: isEmail ? cleanId : `${studentNum}@tut4life.ac.za`,
-        institution: 'Tshwane University of Technology',
-        department: 'Computer Systems Engineering',
-        monthlyAllowance: 3500,
-        avatarInitials: studentNum.slice(0, 2).toUpperCase(),
-      };
-      setUser(dynamicUser);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(dynamicUser));
-      return { success: true };
-    }
-
     return {
       success: false,
-      error: 'Invalid student number or email. (Hint: Use 230099774 or click 1-Click Demo Sign-In)',
+      error: 'Account not found. Please click "Register New Student" to create your account and password.',
     };
   };
 
@@ -140,6 +130,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }): Promise<{ success: boolean; error?: string }> => {
     if (!data.name.trim()) return { success: false, error: 'Full name is required' };
     if (!data.studentNumber.trim()) return { success: false, error: 'Student number is required' };
+    if (!data.pinOrPassword || data.pinOrPassword.trim().length < 4) {
+      return { success: false, error: 'Please choose a password with at least 4 characters.' };
+    }
 
     const initials = data.name
       .split(' ')
@@ -148,7 +141,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .slice(0, 2)
       .toUpperCase() || 'ST';
 
-    const localUser: StudentUser = {
+    const localUser: any = {
       id: `tut-${data.studentNumber.trim()}`,
       name: data.name.trim(),
       studentNumber: data.studentNumber.trim(),
@@ -157,6 +150,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       department: 'Computer Systems Engineering',
       monthlyAllowance: data.monthlyAllowance || 3500,
       avatarInitials: initials,
+      password: data.pinOrPassword.trim(),
     };
 
     // 1. Try Live Database Registration
@@ -165,7 +159,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         name: data.name,
         studentNumber: data.studentNumber,
         email: data.email,
-        pin: data.pinOrPassword,
+        pin: data.pinOrPassword.trim(),
         monthlyAllowance: data.monthlyAllowance,
       });
 
@@ -176,12 +170,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Also update local list
         try {
           const storedList = localStorage.getItem('tut_registered_students');
-          const registered: StudentUser[] = storedList ? JSON.parse(storedList) : [];
-          registered.push(apiRes.user);
+          const registered: any[] = storedList ? JSON.parse(storedList) : [];
+          registered.push({ ...apiRes.user, password: data.pinOrPassword.trim() });
           localStorage.setItem('tut_registered_students', JSON.stringify(registered));
         } catch {}
 
         return { success: true };
+      }
+      if (apiRes && apiRes.error) {
+        return { success: false, error: apiRes.error };
       }
     } catch (apiErr) {
       console.warn('Live API registration attempted, falling back to client mode:', apiErr);
@@ -190,7 +187,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // 2. Client fallback
     try {
       const storedList = localStorage.getItem('tut_registered_students');
-      const registered: StudentUser[] = storedList ? JSON.parse(storedList) : [];
+      const registered: any[] = storedList ? JSON.parse(storedList) : [];
       registered.push(localUser);
       localStorage.setItem('tut_registered_students', JSON.stringify(registered));
     } catch (e) {

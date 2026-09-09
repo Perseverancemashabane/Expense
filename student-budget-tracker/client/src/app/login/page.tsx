@@ -33,6 +33,8 @@ export default function LoginPage() {
   const [regStudentNumber, setRegStudentNumber] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPin, setRegPin] = useState('');
+  const [regConfirmPin, setRegConfirmPin] = useState('');
+  const [showRegPassword, setShowRegPassword] = useState(false);
   const [regAllowance, setRegAllowance] = useState('3500');
 
   // Feedback states
@@ -93,14 +95,32 @@ export default function LoginPage() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (!regName.trim()) {
+      setError('Please enter your full student name.');
+      return;
+    }
+    if (!regStudentNumber.trim()) {
+      setError('Please enter your TUT student number.');
+      return;
+    }
+    if (!regPin || regPin.trim().length < 4) {
+      setError('Please create a password of at least 4 characters.');
+      return;
+    }
+    if (regPin.trim() !== regConfirmPin.trim()) {
+      setError('Passwords do not match. Please re-enter your password to confirm.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
       const res = await register({
-        name: regName,
-        studentNumber: regStudentNumber,
-        email: regEmail,
-        pinOrPassword: regPin,
+        name: regName.trim(),
+        studentNumber: regStudentNumber.trim(),
+        email: regEmail.trim(),
+        pinOrPassword: regPin.trim(),
         monthlyAllowance: parseFloat(regAllowance) || 3500,
       });
 
@@ -382,6 +402,65 @@ export default function LoginPage() {
                     className="w-full pl-8 pr-4 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="reg-pin"
+                  className="block text-xs font-semibold text-slate-300 mb-1"
+                >
+                  Create Student Password or PIN
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                    <Lock className="w-4 h-4" />
+                  </div>
+                  <input
+                    id="reg-pin"
+                    type={showRegPassword ? 'text' : 'password'}
+                    required
+                    minLength={4}
+                    placeholder="Create your portal password (min 4 chars)"
+                    value={regPin}
+                    onChange={(e) => setRegPin(e.target.value)}
+                    className="w-full pl-9 pr-10 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                  />
+                  <button
+                    type="button"
+                    aria-label={showRegPassword ? 'Hide password' : 'Show password'}
+                    onClick={() => setShowRegPassword(!showRegPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-200"
+                  >
+                    {showRegPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="reg-confirm-pin"
+                  className="block text-xs font-semibold text-slate-300 mb-1"
+                >
+                  Confirm Password or PIN
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                    <Lock className="w-4 h-4" />
+                  </div>
+                  <input
+                    id="reg-confirm-pin"
+                    type={showRegPassword ? 'text' : 'password'}
+                    required
+                    minLength={4}
+                    placeholder="Re-enter password to confirm"
+                    value={regConfirmPin}
+                    onChange={(e) => setRegConfirmPin(e.target.value)}
+                    className="w-full pl-9 pr-10 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                  />
+                </div>
+                <p className="text-3xs text-slate-400 mt-1">
+                  You will use this password each time you sign into your private student expense account.
+                </p>
               </div>
 
               <button

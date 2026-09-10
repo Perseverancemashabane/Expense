@@ -2,6 +2,19 @@ import { Request, Response } from 'express';
 import { db } from '../config/db';
 import { sendPasswordResetEmail } from '../services/emailService';
 
+function maskEmail(email: string): string {
+  if (!email) return 'Registered University Email';
+  const clean = email.trim();
+  const atIdx = clean.indexOf('@');
+  if (atIdx === -1) return clean;
+  const username = clean.slice(0, atIdx);
+  const domain = clean.slice(atIdx + 1);
+  if (username.length <= 3) {
+    return `${username[0]}***@${domain}`;
+  }
+  return `${username.slice(0, 3)}***${username.slice(-1)}@${domain}`;
+}
+
 const DEMO_STUDENT = {
   id: 'tut-230099774',
   name: 'Naledi Perseverance Mashabane',
@@ -190,7 +203,7 @@ export const authController = {
         if (existingByPhone) {
           return res.status(409).json({
             success: false,
-            error: `An account with phone/WhatsApp number "${cleanPhone}" already exists. Please sign in or use "Forgot Password".`,
+            error: `An account with phone number "${cleanPhone}" already exists. Please sign in or use "Forgot Password".`,
           });
         }
       }
@@ -244,7 +257,7 @@ export const authController = {
     try {
       const { identifier } = req.body;
       if (!identifier) {
-        return res.status(400).json({ success: false, error: 'WhatsApp number or student number is required' });
+        return res.status(400).json({ success: false, error: 'Student number or university email is required' });
       }
 
       const cleanId = String(identifier).trim();
@@ -273,17 +286,16 @@ export const authController = {
       if (!student) {
         return res.status(404).json({
           success: false,
-          error: `No account found for "${cleanId}". Please verify your WhatsApp number or student number.`,
+          error: `No student account found for "${cleanId}". Please verify your student number or university email.`,
         });
       }
 
       // Generate a secure 6-digit verification code
       const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
-      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour expiration
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 60 minutes expiration
 
       await db.students.saveResetToken(student.student_number, resetCode, expiresAt);
 
-      // Full reset URL for direct WhatsApp clicks
       const clientBase =
         process.env.CLIENT_URL && !process.env.CLIENT_URL.includes('localhost')
           ? process.env.CLIENT_URL
@@ -293,32 +305,27 @@ export const authController = {
 
       const fullResetLink = `${clientBase.replace(/\/$/, '')}/login?mode=reset&token=${resetCode}&student=${student.student_number}`;
 
-      // Build WhatsApp Link
-      const studentPhone = (student.phone_number || '').trim();
-      const rawDigits = studentPhone.replace(/\D/g, '');
-      const intlWaNumber = rawDigits.startsWith('0')
-        ? '27' + rawDigits.slice(1)
-        : (rawDigits.startsWith('27') ? rawDigits : (rawDigits ? '27' + rawDigits : ''));
+      const targetEmail = (student.email || `${student.student_number}@tut4life.ac.za`).trim().toLowerCase();
+      const maskedContact = maskEmail(targetEmail);
 
-      const waText = `Hello ${student.name}! 🎓\n\nHere is your password reset link for the TUT Student Budget Tracker:\n🔗 ${fullResetLink}\n\nYour 6-digit verification code is: *${resetCode}*\n\n(Valid for 60 minutes)`;
-
-      const whatsappLink = intlWaNumber
-        ? `https://wa.me/${intlWaNumber}?text=${encodeURIComponent(waText)}`
-        : `https://wa.me/?text=${encodeURIComponent(waText)}`;
-
-      // Mask phone number for security
-      const maskedPhone = studentPhone.length >= 10
-        ? `${studentPhone.slice(0, 3)} *** ${studentPhone.slice(-4)}`
-        : (studentPhone || 'Registered WhatsApp Number');
+      // Immediately dispatch real Email OTP directly to student's inbox
+      const emailResult = await sendPasswordResetEmail({
+        to: targetEmail,
+        studentName: student.name,
+        studentNumber: student.student_number,
+        resetCode,
+        resetLink: fullResetLink,
+      });
 
       return res.json({
         success: true,
-        message: `Password reset link prepared for WhatsApp (${maskedPhone})! Click below to open WhatsApp.`,
-        whatsappLink,
-        phoneNumber: studentPhone,
-        maskedContact: maskedPhone,
-        deliveryMethod: 'whatsapp',
+        message: `6-digit verification code sent directly to your email (${maskedContact})! Please check your inbox.`,
         token: resetCode,
+        studentNumber: student.student_number,
+        email: targetEmail,
+        maskedContact,
+        deliveryMethod: 'email',
+        emailSent: emailResult.sent,
         resetLink: fullResetLink,
         expiresIn: '60 minutes',
       });

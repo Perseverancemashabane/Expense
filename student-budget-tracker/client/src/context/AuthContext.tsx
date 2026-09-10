@@ -33,8 +33,6 @@ interface AuthContextType {
     error?: string;
     token?: string;
     resetLink?: string;
-    whatsappLink?: string;
-    phoneNumber?: string;
     maskedContact?: string;
     studentNumber?: string;
   }>;
@@ -234,7 +232,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const requestPasswordReset = async (
     identifier: string,
-    deliveryMethod: string = 'whatsapp'
+    deliveryMethod: string = 'email'
   ) => {
     try {
       const res = await apiRequestPasswordReset(identifier, deliveryMethod);

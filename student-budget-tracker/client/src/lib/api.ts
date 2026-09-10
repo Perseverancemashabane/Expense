@@ -1,16 +1,21 @@
 import { BudgetSummary, CategorySummary, Expense, AnalyticsSummary } from '../types';
 
-// Resolve production backend, strictly discarding placeholder domains or invalid configurations
+// Resolve backend API URL: Use local backend when browsing on localhost, or production on Render/Vercel
 const rawEnvUrl = process.env.NEXT_PUBLIC_API_URL || '';
-const API_BASE =
-  rawEnvUrl &&
-  !rawEnvUrl.includes('YOUR-RENDER-APP-NAME') &&
-  !rawEnvUrl.includes('placeholder') &&
-  !rawEnvUrl.includes('student-budget-tracker-api') &&
-  !rawEnvUrl.includes('localhost') &&
-  rawEnvUrl.startsWith('https://')
-    ? rawEnvUrl
-    : 'https://expense-31tf.onrender.com/api';
+const isBrowserLocalhost =
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+const API_BASE = isBrowserLocalhost
+  ? 'http://localhost:5000/api'
+  : (rawEnvUrl &&
+     !rawEnvUrl.includes('YOUR-RENDER-APP-NAME') &&
+     !rawEnvUrl.includes('placeholder') &&
+     !rawEnvUrl.includes('student-budget-tracker-api') &&
+     !rawEnvUrl.includes('localhost') &&
+     rawEnvUrl.startsWith('https://')
+       ? rawEnvUrl
+       : 'https://expense-31tf.onrender.com/api');
 
 // Initial student demo data for resilient offline / mobile fallback
 const INITIAL_DEMO_DATA = {
@@ -580,7 +585,7 @@ export async function registerStudentAccount(data: {
   }
 }
 
-export async function requestPasswordReset(identifier: string, deliveryMethod: string = 'whatsapp') {
+export async function requestPasswordReset(identifier: string, deliveryMethod: string = 'email') {
   try {
     const res = await safeFetch(`${API_BASE}/auth/forgot-password`, {
       method: 'POST',
@@ -599,7 +604,7 @@ export async function requestPasswordReset(identifier: string, deliveryMethod: s
     if (isTimeout) {
       return {
         success: false,
-        error: 'The server was waking up from sleep. Please click "Send WhatsApp Reset Link" once more.',
+        error: 'The server was waking up from sleep. Please click "Send Verification Code" once more.',
       };
     }
     return { success: false, error: err.message || 'Server unreachable' };

@@ -1,5 +1,11 @@
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
+import dns from 'dns';
+
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch {}
+
 dotenv.config();
 
 export interface SendResetEmailParams {
@@ -38,17 +44,30 @@ export async function sendPasswordResetEmail({
 
   try {
     const isGmail = smtpUser.toLowerCase().includes('@gmail.com');
+    let targetHost = smtpHost || 'smtp.gmail.com';
+    if (isGmail) {
+      try {
+        const ips = await dns.promises.resolve4('smtp.gmail.com');
+        if (ips && ips.length > 0) {
+          targetHost = ips[0];
+          console.log(`[EmailService] Direct IPv4 resolved for Gmail: ${targetHost}`);
+        }
+      } catch (dnsErr: any) {
+        console.warn('[EmailService] DNS resolve4 warning:', dnsErr.message);
+      }
+    }
+
     const transportOptions: any = isGmail
       ? {
-          host: 'smtp.gmail.com',
+          host: targetHost,
           port: 465,
           secure: true,
-          family: 4, // Force IPv4 to prevent Render cloud ENETUNREACH errors
           auth: {
             user: smtpUser,
             pass: smtpPass,
           },
           tls: {
+            servername: 'smtp.gmail.com',
             rejectUnauthorized: false,
           },
           connectionTimeout: 15000,
@@ -59,7 +78,6 @@ export async function sendPasswordResetEmail({
           host: smtpHost,
           port: smtpPort,
           secure: smtpPort === 465,
-          family: 4,
           auth: {
             user: smtpUser,
             pass: smtpPass,
@@ -154,15 +172,15 @@ export async function sendPasswordResetEmail({
       if (isGmail) {
         console.warn('⚠️ Port 465 attempt failed, retrying over Gmail port 587 (STARTTLS IPv4):', primaryErr.message);
         const fallbackTransporter = nodemailer.createTransport({
-          host: 'smtp.gmail.com',
+          host: targetHost,
           port: 587,
           secure: false,
-          family: 4,
           auth: {
             user: smtpUser,
             pass: smtpPass,
           },
           tls: {
+            servername: 'smtp.gmail.com',
             rejectUnauthorized: false,
           },
           connectionTimeout: 15000,

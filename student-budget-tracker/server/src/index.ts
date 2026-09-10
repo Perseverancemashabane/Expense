@@ -2,6 +2,12 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
+import dns from 'dns';
+
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch {}
+
 import { testConnection } from './config/db';
 import budgetRoutes from './routes/budgetRoutes';
 import expenseRoutes from './routes/expenseRoutes';

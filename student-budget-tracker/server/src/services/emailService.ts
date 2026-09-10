@@ -40,10 +40,15 @@ export async function sendPasswordResetEmail({
     const isGmail = smtpUser.toLowerCase().includes('@gmail.com');
     const transportOptions: any = isGmail
       ? {
-          service: 'gmail',
+          host: 'smtp.gmail.com',
+          port: 465,
+          secure: true,
           auth: {
             user: smtpUser,
             pass: smtpPass,
+          },
+          tls: {
+            rejectUnauthorized: false,
           },
           connectionTimeout: 15000,
           greetingTimeout: 15000,
@@ -56,6 +61,9 @@ export async function sendPasswordResetEmail({
           auth: {
             user: smtpUser,
             pass: smtpPass,
+          },
+          tls: {
+            rejectUnauthorized: false,
           },
           connectionTimeout: 15000,
           greetingTimeout: 15000,

@@ -326,6 +326,7 @@ export const authController = {
         maskedContact,
         deliveryMethod: 'email',
         emailSent: emailResult.sent,
+        emailError: emailResult.error || null,
         resetLink: fullResetLink,
         expiresIn: '60 minutes',
       });

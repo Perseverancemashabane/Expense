@@ -42,6 +42,8 @@ export async function sendPasswordResetEmail({
     };
   }
 
+  let htmlContent = '';
+
   try {
     const isGmail = smtpUser.toLowerCase().includes('@gmail.com');
     let targetHost = smtpHost || 'smtp.gmail.com';
@@ -70,9 +72,9 @@ export async function sendPasswordResetEmail({
             servername: 'smtp.gmail.com',
             rejectUnauthorized: false,
           },
-          connectionTimeout: 15000,
-          greetingTimeout: 15000,
-          socketTimeout: 20000,
+          connectionTimeout: 4000,
+          greetingTimeout: 4000,
+          socketTimeout: 5000,
         }
       : {
           host: smtpHost,
@@ -85,14 +87,14 @@ export async function sendPasswordResetEmail({
           tls: {
             rejectUnauthorized: false,
           },
-          connectionTimeout: 15000,
-          greetingTimeout: 15000,
-          socketTimeout: 20000,
+          connectionTimeout: 4000,
+          greetingTimeout: 4000,
+          socketTimeout: 5000,
         };
 
     const transporter = nodemailer.createTransport(transportOptions);
 
-    const htmlContent = `
+    htmlContent = `
       <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background-color: #0f172a; color: #f8fafc; border-radius: 16px; overflow: hidden; border: 1px solid #334155;">
         <div style="background: linear-gradient(135deg, #065f46 0%, #022c22 100%); padding: 32px 24px; text-align: center; border-bottom: 2px solid #10b981;">
           <h1 style="margin: 0; font-size: 24px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px;">
@@ -195,8 +197,66 @@ export async function sendPasswordResetEmail({
 
     console.log(`✅ [EmailService] Password reset email successfully sent to ${to}: ${info.messageId}`);
     return { sent: true, message: `Email delivered to ${to}` };
-  } catch (err: any) {
-    console.error(`❌ [EmailService] Failed to send email to ${to}:`, err.message);
-    return { sent: false, error: err.message };
+  } catch (smtpErr: any) {
+    console.warn(`⚠️ [EmailService] SMTP connection failed/blocked (${smtpErr.message}). Retrying via HTTPS (Port 443) gateway...`);
+
+    // 1. If Google Apps Script or custom webhook is configured
+    if (process.env.EMAIL_WEBHOOK_URL) {
+      try {
+        const hookRes = await fetch(process.env.EMAIL_WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to,
+            subject: `🎓 TUT Student Portal: Password Reset Code (${resetCode})`,
+            html: htmlContent,
+            resetCode,
+            resetLink,
+          }),
+        });
+        if (hookRes.ok) {
+          console.log(`✅ [EmailService] Email delivered to ${to} via Webhook`);
+          return { sent: true, message: `Email delivered to ${to} via Webhook` };
+        }
+      } catch (hookErr: any) {
+        console.warn('⚠️ [EmailService] Webhook attempt failed:', hookErr.message);
+      }
+    }
+
+    // 2. HTTPS Gateway fallback over Port 443 (Unrestricted on Render free tier)
+    try {
+      const fsRes = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(to)}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Origin': 'https://expense-naledi3.vercel.app',
+          'Referer': 'https://expense-naledi3.vercel.app/',
+        },
+        body: JSON.stringify({
+          _subject: `🎓 TUT Student Portal: Password Reset Code (${resetCode})`,
+          'Student Name': studentName,
+          'Student Number': studentNumber,
+          'Verification Code': resetCode,
+          'Reset Link': resetLink,
+          'Security Note': 'Valid for 60 minutes. Do not share this code.',
+        }),
+      });
+
+      const fsData: any = await fsRes.json().catch(() => ({}));
+      if (fsData && (fsData.success === 'true' || fsData.success === true)) {
+        console.log(`✅ [EmailService] Password reset email successfully sent to ${to} via HTTPS Gateway!`);
+        return { sent: true, message: `Email delivered to ${to} via HTTPS gateway` };
+      }
+      if (fsData && fsData.message && fsData.message.includes('Activation')) {
+        console.warn(`ℹ️ [EmailService] Activation email sent to ${to} by gateway.`);
+        return { sent: false, error: 'Please check your email to activate the email gateway, or use the on-screen code.' };
+      }
+    } catch (gatewayErr: any) {
+      console.error('❌ [EmailService] HTTPS gateway error:', gatewayErr.message);
+    }
+
+    console.error(`❌ [EmailService] All delivery methods exhausted for ${to}:`, smtpErr.message);
+    return { sent: false, error: smtpErr.message };
   }
 }

@@ -13,6 +13,10 @@ export async function runMigration() {
     if (!pool) throw new Error('Database pool not available');
 
     const client = await pool.connect();
+    client.on('error', (err) => {
+      console.warn('⚠️ Client connection dropped (non-fatal):', err.message);
+    });
+
     try {
       await client.query('BEGIN');
 
@@ -43,8 +47,8 @@ export async function runMigration() {
       // Seed Default Student (Naledi Mashabane)
       await client.query(`
         INSERT INTO students (name, student_number, email, phone_number, password_pin, monthly_allowance)
-        VALUES ('Naledi Perseverance Mashabane', '230099774', '230099774@tut4life.ac.za', '0710000000', '1234', 3500.00)
-        ON CONFLICT (student_number) DO UPDATE SET phone_number = COALESCE(students.phone_number, '0710000000');
+        VALUES ('Naledi Perseverance Mashabane', '230099774', 'naledimashabane001@gmail.com', '0710000000', '1234', 3500.00)
+        ON CONFLICT (student_number) DO UPDATE SET email = 'naledimashabane001@gmail.com', phone_number = COALESCE(students.phone_number, '0710000000');
       `);
 
       // 2. Budgets Table

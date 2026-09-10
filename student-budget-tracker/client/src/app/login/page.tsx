@@ -33,6 +33,7 @@ function LoginContent() {
     register,
     requestPasswordReset,
     confirmPasswordReset,
+    resetPasswordById,
   } = useAuth();
 
   const [tab, setTab] = useState<'signin' | 'register' | 'forgot' | 'reset'>('signin');
@@ -50,7 +51,14 @@ function LoginContent() {
   const [showRegPassword, setShowRegPassword] = useState(false);
   const [regAllowance, setRegAllowance] = useState('3500');
 
-  // Forgot Password state
+  // ID Number Verification Reset state
+  const [resetIdStudentNumber, setResetIdStudentNumber] = useState('230099774');
+  const [resetIdNumber, setResetIdNumber] = useState('');
+  const [resetIdNewPassword, setResetIdNewPassword] = useState('');
+  const [resetIdConfirmPassword, setResetIdConfirmPassword] = useState('');
+  const [showResetIdPassword, setShowResetIdPassword] = useState(false);
+
+  // Forgot Password state (Email fallback)
   const [forgotId, setForgotId] = useState('');
   const [forgotResult, setForgotResult] = useState<{
     message?: string;
@@ -58,7 +66,7 @@ function LoginContent() {
     studentNumber?: string;
   } | null>(null);
 
-  // Reset Password state
+  // Reset Password state (Token fallback)
   const [resetStudentNumber, setResetStudentNumber] = useState('');
   const [resetToken, setResetToken] = useState('');
   const [resetNewPassword, setResetNewPassword] = useState('');
@@ -233,6 +241,55 @@ function LoginContent() {
       }
     } catch (err: any) {
       setError(err.message || 'Failed to dispatch verification code to your email.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleResetPasswordById = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccessMsg('');
+
+    const sNum = resetIdStudentNumber.trim();
+    const idNum = resetIdNumber.trim();
+    const newPass = resetIdNewPassword.trim();
+    const confirmPass = resetIdConfirmPassword.trim();
+
+    if (!sNum) {
+      setError('Please enter your TUT student number.');
+      return;
+    }
+    if (!idNum || idNum.length < 6) {
+      setError('Please enter your South African ID number (13 digits) or passport number.');
+      return;
+    }
+    if (!newPass || newPass.length < 4) {
+      setError('New password must be at least 4 characters long.');
+      return;
+    }
+    if (newPass !== confirmPass) {
+      setError('New passwords do not match. Please re-enter.');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const res = await resetPasswordById(sNum, idNum, newPass);
+      if (res.success) {
+        setSuccessMsg(res.message || 'Identity verified! Your password has been successfully reset. You can now sign in.');
+        setIdentifier(sNum);
+        setPassword(newPass);
+        setResetIdNumber('');
+        setResetIdNewPassword('');
+        setResetIdConfirmPassword('');
+        setTab('signin');
+      } else {
+        setError(res.error || 'Failed to verify identity. Please check your student and ID numbers.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to reset password. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -690,91 +747,140 @@ function LoginContent() {
             </form>
           )}
 
-          {/* Tab 3: Forgotten Password / Request Email OTP */}
+          {/* Tab 3: Reset Password via SA ID Number Verification */}
           {tab === 'forgot' && (
             <div className="space-y-4">
               <div>
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Mail className="w-4 h-4 text-emerald-400" />
-                  Reset Password via Email OTP
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  Reset Password via SA ID Verification
                 </h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  Enter your TUT Student Number or University Email. We will immediately dispatch a 6-digit verification code directly to your email inbox.
+                  Enter your TUT Student Number and South African ID Number (or Passport Number) to securely verify your identity and set a new password.
                 </p>
               </div>
 
-              <form onSubmit={handleForgotPassword} className="space-y-4">
+              <form onSubmit={handleResetPasswordById} className="space-y-3.5">
                 <div>
                   <label
-                    htmlFor="forgot-id"
+                    htmlFor="id-reset-student-number"
                     className="block text-xs font-semibold text-slate-300 mb-1"
                   >
-                    TUT Student Number or University Email
+                    TUT Student Number
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
-                      <Mail className="w-4 h-4" />
+                      <User className="w-4 h-4" />
                     </div>
                     <input
-                      id="forgot-id"
+                      id="id-reset-student-number"
                       type="text"
                       required
-                      placeholder="e.g. 230099774 or student@tut4life.ac.za"
-                      value={forgotId}
-                      onChange={(e) => setForgotId(e.target.value)}
+                      placeholder="e.g. 230099774"
+                      value={resetIdStudentNumber}
+                      onChange={(e) => setResetIdStudentNumber(e.target.value)}
                       className="w-full pl-9 pr-4 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
                     />
                   </div>
                 </div>
 
-                <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2.5">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>
-                    A 6-digit verification code will be sent directly to your university email inbox for instant 1-tap recovery.
-                  </span>
+                <div>
+                  <label
+                    htmlFor="id-reset-id-number"
+                    className="block text-xs font-semibold text-slate-300 mb-1"
+                  >
+                    South African ID Number or Passport
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                      <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                    </div>
+                    <input
+                      id="id-reset-id-number"
+                      type="text"
+                      required
+                      placeholder="Enter your 13-digit SA ID number or Passport"
+                      value={resetIdNumber}
+                      onChange={(e) => setResetIdNumber(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                    />
+                  </div>
+                  <p className="text-3xs text-slate-400 mt-1">
+                    Verified securely against your institutional student record. No waiting for SMS or emails.
+                  </p>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="id-reset-new-password"
+                    className="block text-xs font-semibold text-slate-300 mb-1"
+                  >
+                    New Student Password or PIN
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                      <Lock className="w-4 h-4" />
+                    </div>
+                    <input
+                      id="id-reset-new-password"
+                      type={showResetIdPassword ? 'text' : 'password'}
+                      required
+                      minLength={4}
+                      placeholder="Enter new password (min 4 characters)"
+                      value={resetIdNewPassword}
+                      onChange={(e) => setResetIdNewPassword(e.target.value)}
+                      className="w-full pl-9 pr-10 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                    />
+                    <button
+                      type="button"
+                      aria-label={showResetIdPassword ? 'Hide password' : 'Show password'}
+                      onClick={() => setShowResetIdPassword(!showResetIdPassword)}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-200"
+                    >
+                      {showResetIdPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="id-reset-confirm-password"
+                    className="block text-xs font-semibold text-slate-300 mb-1"
+                  >
+                    Confirm New Password
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                      <Lock className="w-4 h-4" />
+                    </div>
+                    <input
+                      id="id-reset-confirm-password"
+                      type={showResetIdPassword ? 'text' : 'password'}
+                      required
+                      minLength={4}
+                      placeholder="Re-enter password to confirm"
+                      value={resetIdConfirmPassword}
+                      onChange={(e) => setResetIdConfirmPassword(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                    />
+                  </div>
                 </div>
 
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-md transition active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full mt-2 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-md shadow-emerald-900/30 transition active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {isSubmitting ? (
-                    <span>Sending Verification Code...</span>
+                    <span>Verifying Identity...</span>
                   ) : (
                     <>
-                      <Send className="w-4 h-4" />
-                      <span>Send 6-Digit Code to My Email</span>
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>Verify ID & Update Password</span>
                     </>
                   )}
                 </button>
               </form>
-
-              {/* If Reset Code was Generated and Dispatched */}
-              {forgotResult && (
-                <div className="mt-4 p-4 rounded-2xl bg-emerald-950/70 border border-emerald-500/40 space-y-3 animate-in fade-in duration-200">
-                  <div className="flex items-center gap-2 text-emerald-300 font-bold text-xs">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                    <span>Verification Code Sent</span>
-                  </div>
-                  <p className="text-2xs text-slate-300 leading-relaxed">
-                    A 6-digit verification code has been dispatched directly to{' '}
-                    <strong className="text-white">{forgotResult.maskedContact}</strong>.
-                  </p>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTab('reset');
-                      setError('');
-                    }}
-                    className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md flex items-center justify-center gap-2 transition active:scale-[0.99] cursor-pointer"
-                  >
-                    <span>Enter Verification Code</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              )}
 
               <div className="flex items-center justify-between pt-2 text-xs">
                 <button
@@ -792,12 +898,12 @@ function LoginContent() {
                 <button
                   type="button"
                   onClick={() => {
-                    setTab('reset');
+                    setTab('register');
                     setError('');
                   }}
                   className="text-emerald-400 hover:underline cursor-pointer"
                 >
-                  Already have a code?
+                  Need an account?
                 </button>
               </div>
             </div>

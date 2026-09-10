@@ -214,17 +214,19 @@ export const db = {
       student_number: string;
       email: string;
       phone_number?: string;
+      id_number?: string;
       password_pin?: string;
       monthly_allowance?: number;
     }) {
       const allowance = Number(student.monthly_allowance) || 3500.0;
       const cleanPhone = student.phone_number ? student.phone_number.trim() : null;
+      const cleanIdNum = student.id_number ? student.id_number.trim() : null;
       if (pool && isUsingPostgres) {
         const query = `
-          INSERT INTO students (name, student_number, email, phone_number, password_pin, monthly_allowance, created_at, updated_at)
-          VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+          INSERT INTO students (name, student_number, email, phone_number, id_number, password_pin, monthly_allowance, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
           ON CONFLICT (student_number)
-          DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email, phone_number = COALESCE(EXCLUDED.phone_number, students.phone_number), password_pin = EXCLUDED.password_pin, monthly_allowance = EXCLUDED.monthly_allowance, updated_at = NOW()
+          DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email, phone_number = COALESCE(EXCLUDED.phone_number, students.phone_number), id_number = COALESCE(EXCLUDED.id_number, students.id_number), password_pin = EXCLUDED.password_pin, monthly_allowance = EXCLUDED.monthly_allowance, updated_at = NOW()
           RETURNING *;
         `;
         const res = await pool.query(query, [
@@ -232,6 +234,7 @@ export const db = {
           student.student_number.trim(),
           student.email.trim().toLowerCase(),
           cleanPhone,
+          cleanIdNum,
           student.password_pin || '1234',
           allowance,
         ]);
@@ -246,6 +249,7 @@ export const db = {
         existing.name = student.name.trim();
         existing.email = student.email.trim().toLowerCase();
         if (cleanPhone) existing.phone_number = cleanPhone;
+        if (cleanIdNum) existing.id_number = cleanIdNum;
         existing.password_pin = student.password_pin || existing.password_pin || '1234';
         existing.monthly_allowance = allowance;
         existing.updated_at = now;
@@ -258,6 +262,7 @@ export const db = {
         student_number: student.student_number.trim(),
         email: student.email.trim().toLowerCase(),
         phone_number: cleanPhone,
+        id_number: cleanIdNum,
         password_pin: student.password_pin || '1234',
         monthly_allowance: allowance,
         created_at: now,
@@ -390,6 +395,89 @@ export const db = {
         return student;
       }
       return null;
+    },
+
+    async verifyIdentityAndResetPassword(studentNumber: string, idNumber: string, newPasswordPin: string) {
+      const cleanNum = studentNumber.trim();
+      const cleanId = idNumber.trim().replace(/\s+/g, '');
+      const newPin = newPasswordPin.trim();
+
+      if (pool && isUsingPostgres) {
+        // Find student by student number
+        const findRes = await pool.query('SELECT * FROM students WHERE student_number = $1', [cleanNum]);
+        let student = findRes.rows[0];
+
+        if (!student) {
+          // If demo student and not yet created in PostgreSQL
+          if (cleanNum === '230099774') {
+            student = await db.students.create({
+              name: 'Naledi Perseverance Mashabane',
+              student_number: '230099774',
+              email: 'naledimashabane001@gmail.com',
+              id_number: cleanId,
+              phone_number: '0710000000',
+              password_pin: newPin,
+              monthly_allowance: 3500,
+            });
+            return { success: true, student };
+          }
+          return { success: false, error: `No student account found with student number "${cleanNum}".` };
+        }
+
+        const dbId = (student.id_number || '').trim().replace(/\s+/g, '');
+        // If student has an existing registered ID number, verify match
+        if (dbId) {
+          if (dbId.toLowerCase() !== cleanId.toLowerCase()) {
+            return { success: false, error: 'The entered South African ID number does not match student records.' };
+          }
+        } else {
+          // If student has no registered ID number yet, register this ID number to their profile
+          await pool.query('UPDATE students SET id_number = $1 WHERE student_number = $2', [cleanId, cleanNum]);
+        }
+
+        // Update password
+        const updateRes = await pool.query(
+          'UPDATE students SET password_pin = $1, reset_token = NULL, reset_token_expires = NULL, updated_at = NOW() WHERE student_number = $2 RETURNING *',
+          [newPin, cleanNum]
+        );
+
+        return { success: true, student: updateRes.rows[0] };
+      }
+
+      // Local fallback
+      const data = getLocalData();
+      if (!data.students) data.students = [];
+      let student = data.students.find((s: any) => s.student_number === cleanNum);
+
+      if (!student) {
+        if (cleanNum === '230099774') {
+          student = await db.students.create({
+            name: 'Naledi Perseverance Mashabane',
+            student_number: '230099774',
+            email: 'naledimashabane001@gmail.com',
+            id_number: cleanId,
+            phone_number: '0710000000',
+            password_pin: newPin,
+            monthly_allowance: 3500,
+          });
+          return { success: true, student };
+        }
+        return { success: false, error: `No student account found with student number "${cleanNum}".` };
+      }
+
+      const dbId = (student.id_number || '').trim().replace(/\s+/g, '');
+      if (dbId && dbId.toLowerCase() !== cleanId.toLowerCase()) {
+        return { success: false, error: 'The entered South African ID number does not match student records.' };
+      }
+
+      student.id_number = cleanId;
+      student.password_pin = newPin;
+      delete student.reset_token;
+      delete student.reset_token_expires;
+      student.updated_at = new Date().toISOString();
+      saveLocalData(data);
+
+      return { success: true, student };
     },
   },
 

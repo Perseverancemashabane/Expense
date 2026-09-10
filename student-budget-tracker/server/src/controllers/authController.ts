@@ -374,6 +374,56 @@ export const authController = {
     }
   },
 
+  // POST /api/auth/reset-password-by-id
+  async resetPasswordById(req: Request, res: Response) {
+    try {
+      const { studentNumber, idNumber, newPassword } = req.body;
+
+      if (!studentNumber || !idNumber) {
+        return res.status(400).json({
+          success: false,
+          error: 'TUT student number and South African ID number are required.',
+        });
+      }
+
+      const cleanNum = String(studentNumber).trim();
+      const cleanId = String(idNumber).trim().replace(/\s+/g, '');
+      const cleanNewPassword = newPassword !== undefined && newPassword !== null ? String(newPassword).trim() : '';
+
+      if (cleanId.length < 6) {
+        return res.status(400).json({
+          success: false,
+          error: 'Please enter a valid South African ID number (13 digits) or passport number.',
+        });
+      }
+
+      if (!cleanNewPassword || cleanNewPassword.length < 4) {
+        return res.status(400).json({
+          success: false,
+          error: 'New password must be at least 4 characters long.',
+        });
+      }
+
+      const result = await db.students.verifyIdentityAndResetPassword(cleanNum, cleanId, cleanNewPassword);
+
+      if (!result.success) {
+        return res.status(400).json({
+          success: false,
+          error: result.error || 'Failed to verify identity. Please check your credentials.',
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: 'Identity verified successfully! Your password has been updated. You can now sign in.',
+        studentNumber: cleanNum,
+      });
+    } catch (err: any) {
+      console.error('Reset password by ID error:', err);
+      return res.status(500).json({ success: false, error: err.message || 'Failed to reset password' });
+    }
+  },
+
   // GET /api/auth/me
   async me(req: Request, res: Response) {
     try {

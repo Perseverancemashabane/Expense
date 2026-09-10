@@ -8,6 +8,7 @@ import {
   registerStudentAccount,
   requestPasswordReset as apiRequestPasswordReset,
   confirmPasswordReset as apiConfirmPasswordReset,
+  resetPasswordById as apiResetPasswordById,
 } from '../lib/api';
 
 interface AuthContextType {
@@ -39,6 +40,11 @@ interface AuthContextType {
   confirmPasswordReset: (
     studentNumber: string,
     token: string,
+    newPassword: string
+  ) => Promise<{ success: boolean; message?: string; error?: string }>;
+  resetPasswordById: (
+    studentNumber: string,
+    idNumber: string,
     newPassword: string
   ) => Promise<{ success: boolean; message?: string; error?: string }>;
   logout: () => void;
@@ -255,6 +261,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const resetPasswordById = async (
+    studentNumber: string,
+    idNumber: string,
+    newPassword: string
+  ) => {
+    try {
+      const res = await apiResetPasswordById(studentNumber, idNumber, newPassword);
+      return res;
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Failed to verify ID and reset password' };
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -266,6 +285,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         register,
         requestPasswordReset,
         confirmPasswordReset,
+        resetPasswordById,
         logout,
       }}
     >

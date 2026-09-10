@@ -37,9 +37,10 @@ export async function runMigration() {
         );
       `);
 
-      // Ensure reset columns and phone_number exist if table was already created
+      // Ensure reset columns, phone_number, and id_number exist if table was already created
       await client.query(`
         ALTER TABLE students ADD COLUMN IF NOT EXISTS phone_number VARCHAR(50);
+        ALTER TABLE students ADD COLUMN IF NOT EXISTS id_number VARCHAR(50);
         ALTER TABLE students ADD COLUMN IF NOT EXISTS reset_token VARCHAR(255);
         ALTER TABLE students ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMPTZ;
       `);

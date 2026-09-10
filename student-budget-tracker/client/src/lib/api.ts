@@ -628,4 +628,22 @@ export async function confirmPasswordReset(studentNumber: string, token: string,
   }
 }
 
+export async function resetPasswordById(studentNumber: string, idNumber: string, newPassword: string) {
+  try {
+    const res = await safeFetch(`${API_BASE}/auth/reset-password-by-id`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ studentNumber, idNumber, newPassword }),
+    }, 15000);
+    if (res.ok) {
+      return await res.json();
+    }
+    const errData = await res.json().catch(() => ({}));
+    return { success: false, error: errData.error || 'Identity verification and password reset failed' };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Server unreachable' };
+  }
+}
+
+
 

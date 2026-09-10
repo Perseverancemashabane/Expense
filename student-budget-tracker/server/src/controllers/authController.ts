@@ -165,7 +165,7 @@ export const authController = {
   // POST /api/auth/register
   async register(req: Request, res: Response) {
     try {
-      const { name, studentNumber, email, phone, phoneNumber, password, monthlyAllowance } = req.body;
+      const { name, studentNumber, email, phone, phoneNumber, password, monthlyAllowance, idNumber, id_number } = req.body;
       if (!name || !studentNumber) {
         return res.status(400).json({ success: false, error: 'Full name and student number are required' });
       }
@@ -178,10 +178,18 @@ export const authController = {
       const cleanNum = String(studentNumber).trim();
       const cleanEmail = email ? String(email).trim().toLowerCase() : `${cleanNum}@tut4life.ac.za`;
       const cleanPhone = (phoneNumber || phone) ? String(phoneNumber || phone).trim() : '';
+      const cleanIdNum = (idNumber || id_number) ? String(idNumber || id_number).trim().replace(/\s+/g, '') : null;
       const cleanName = String(name).trim();
       const allowance = Number(monthlyAllowance) || 3500;
 
-      // 0. Verify if account already exists for student number or email or phone
+      if (cleanIdNum && cleanIdNum.length < 6) {
+        return res.status(400).json({
+          success: false,
+          error: 'Please enter a valid South African ID number (13 digits) or passport number.',
+        });
+      }
+
+      // 0. Verify if account already exists for student number, email, phone, or ID number
       const existingByNumber = await db.students.findByStudentNumber(cleanNum);
       if (existingByNumber) {
         return res.status(409).json({
@@ -208,12 +216,23 @@ export const authController = {
         }
       }
 
-      // 1. Create student in database with student's custom password and phone
+      if (cleanIdNum) {
+        const existingById = await db.students.findByIdNumber(cleanIdNum);
+        if (existingById) {
+          return res.status(409).json({
+            success: false,
+            error: 'An account with this South African ID number is already registered. Please sign in or use "Forgot Password".',
+          });
+        }
+      }
+
+      // 1. Create student in database with student's custom password, phone, and ID number
       const student = await db.students.create({
         name: cleanName,
         student_number: cleanNum,
         email: cleanEmail,
         phone_number: cleanPhone,
+        id_number: cleanIdNum,
         password_pin: cleanPassword,
         monthly_allowance: allowance,
       });
@@ -234,6 +253,7 @@ export const authController = {
         studentNumber: student.student_number,
         email: student.email,
         phoneNumber: student.phone_number || cleanPhone,
+        idNumber: student.id_number || cleanIdNum || '',
         institution: 'Tshwane University of Technology',
         department: 'Computer Systems Engineering',
         monthlyAllowance: Number(student.monthly_allowance) || allowance,

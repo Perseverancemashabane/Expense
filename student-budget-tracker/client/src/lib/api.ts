@@ -559,6 +559,7 @@ export async function registerStudentAccount(data: {
   studentNumber: string;
   email?: string;
   phoneNumber?: string;
+  idNumber?: string;
   pin?: string;
   monthlyAllowance?: number;
 }) {
@@ -571,6 +572,7 @@ export async function registerStudentAccount(data: {
         studentNumber: data.studentNumber,
         email: data.email,
         phoneNumber: data.phoneNumber,
+        idNumber: data.idNumber,
         password: data.pin || '1234',
         monthlyAllowance: data.monthlyAllowance || 3500,
       }),

@@ -45,6 +45,7 @@ function LoginContent() {
   // Registration state
   const [regName, setRegName] = useState('');
   const [regStudentNumber, setRegStudentNumber] = useState('');
+  const [regIdNumber, setRegIdNumber] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPin, setRegPin] = useState('');
   const [regConfirmPin, setRegConfirmPin] = useState('');
@@ -173,6 +174,14 @@ function LoginContent() {
       setError('Please enter your TUT student number.');
       return;
     }
+    if (!regIdNumber.trim()) {
+      setError('Please enter your South African ID number or passport number for password recovery.');
+      return;
+    }
+    if (regIdNumber.trim().replace(/\s+/g, '').length < 6) {
+      setError('Please enter a valid South African ID number (13 digits) or passport number.');
+      return;
+    }
     if (!regPin || regPin.trim().length < 4) {
       setError('Please create a password of at least 4 characters.');
       return;
@@ -189,6 +198,7 @@ function LoginContent() {
         name: regName.trim(),
         studentNumber: regStudentNumber.trim(),
         email: regEmail.trim(),
+        idNumber: regIdNumber.trim().replace(/\s+/g, ''),
         pinOrPassword: regPin.trim(),
         monthlyAllowance: parseFloat(regAllowance) || 3500,
       });
@@ -632,13 +642,40 @@ function LoginContent() {
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label
+                    htmlFor="reg-id-number"
+                    className="block text-xs font-semibold text-slate-300 flex items-center gap-1.5"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>South African ID Number (or Passport)</span>
+                  </label>
+                  <span className="text-3xs text-emerald-400 font-medium">For Password Reset</span>
+                </div>
+                <input
+                  id="reg-id-number"
+                  type="text"
+                  required
+                  minLength={6}
+                  maxLength={25}
+                  placeholder="13-digit SA ID number (e.g. 0205125001087)"
+                  value={regIdNumber}
+                  onChange={(e) => setRegIdNumber(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                />
+                <p className="text-3xs text-slate-400 mt-1">
+                  Stored securely to verify your identity whenever you need to reset or change your password.
+                </p>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label
                     htmlFor="reg-email"
                     className="block text-xs font-semibold text-slate-300 flex items-center gap-1.5"
                   >
                     <Mail className="w-3.5 h-3.5 text-emerald-400" />
                     <span>University Email</span>
                   </label>
-                  <span className="text-3xs text-emerald-400 font-medium">For Password Reset & Recovery</span>
+                  <span className="text-3xs text-slate-400 font-medium">Official Student Email</span>
                 </div>
                 <input
                   id="reg-email"
@@ -651,7 +688,7 @@ function LoginContent() {
                   className="w-full px-3.5 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
                 />
                 <p className="text-3xs text-slate-400 mt-1">
-                  Your 6-digit verification codes and password reset links will be sent directly to this email address.
+                  Used for student account notifications and university records.
                 </p>
               </div>
 

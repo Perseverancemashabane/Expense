@@ -21,6 +21,7 @@ interface AuthContextType {
     name: string;
     studentNumber: string;
     email: string;
+    idNumber?: string;
     phoneNumber?: string;
     pinOrPassword?: string;
     monthlyAllowance?: number;
@@ -154,6 +155,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     name: string;
     studentNumber: string;
     email: string;
+    idNumber?: string;
     phoneNumber?: string;
     pinOrPassword?: string;
     monthlyAllowance?: number;
@@ -177,6 +179,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       studentNumber: data.studentNumber.trim(),
       email: data.email.trim() || `${data.studentNumber.trim()}@tut4life.ac.za`,
       phoneNumber: data.phoneNumber ? data.phoneNumber.trim() : '',
+      idNumber: data.idNumber ? data.idNumber.trim() : '',
       institution: 'Tshwane University of Technology',
       department: 'Computer Systems Engineering',
       monthlyAllowance: data.monthlyAllowance || 3500,
@@ -191,6 +194,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         studentNumber: data.studentNumber,
         email: data.email,
         phoneNumber: data.phoneNumber,
+        idNumber: data.idNumber,
         pin: data.pinOrPassword.trim(),
         monthlyAllowance: data.monthlyAllowance,
       });

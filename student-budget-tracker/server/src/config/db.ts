@@ -213,8 +213,8 @@ export const db = {
       name: string;
       student_number: string;
       email: string;
-      phone_number?: string;
-      id_number?: string;
+      phone_number?: string | null;
+      id_number?: string | null;
       password_pin?: string;
       monthly_allowance?: number;
     }) {
@@ -320,6 +320,20 @@ export const db = {
         const sDigits = String(s.phone_number).replace(/\D/g, '');
         return sDigits === rawDigits || sDigits === localFormat || sDigits === intlFormat;
       }) || null;
+    },
+
+    async findByIdNumber(idNumber: string) {
+      const clean = idNumber.trim().replace(/\s+/g, '');
+      if (!clean) return null;
+      if (pool && isUsingPostgres) {
+        const res = await pool.query('SELECT * FROM students WHERE REPLACE(LOWER(id_number), \' \', \'\') = LOWER($1)', [clean]);
+        return res.rows[0] || null;
+      }
+      const data = getLocalData();
+      if (!data.students) data.students = [];
+      return data.students.find(
+        (s: any) => s.id_number && s.id_number.trim().replace(/\s+/g, '').toLowerCase() === clean.toLowerCase()
+      ) || null;
     },
 
     async getAll() {

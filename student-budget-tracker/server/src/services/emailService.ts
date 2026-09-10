@@ -223,7 +223,58 @@ export async function sendPasswordResetEmail({
       }
     }
 
-    // 2. HTTPS Gateway fallback over Port 443 (Unrestricted on Render free tier)
+    // 2. If Resend REST API is configured
+    if (process.env.RESEND_API_KEY) {
+      try {
+        const resendRes = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+          },
+          body: JSON.stringify({
+            from: 'TUT Student Portal <onboarding@resend.dev>',
+            to: [to],
+            subject: `🎓 TUT Student Portal: Password Reset Code (${resetCode})`,
+            html: htmlContent,
+          }),
+        });
+        const resendData: any = await resendRes.json().catch(() => ({}));
+        if (resendRes.ok && resendData && resendData.id) {
+          console.log(`✅ [EmailService] Email delivered to ${to} via Resend API: ${resendData.id}`);
+          return { sent: true, message: `Email delivered to ${to} via Resend` };
+        }
+      } catch (resendErr: any) {
+        console.warn('⚠️ [EmailService] Resend API attempt failed:', resendErr.message);
+      }
+    }
+
+    // 3. If Brevo REST API is configured
+    if (process.env.BREVO_API_KEY) {
+      try {
+        const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'api-key': process.env.BREVO_API_KEY,
+          },
+          body: JSON.stringify({
+            sender: { name: 'TUT Student Portal', email: 'naledimashabane001@gmail.com' },
+            to: [{ email: to, name: studentName }],
+            subject: `🎓 TUT Student Portal: Password Reset Code (${resetCode})`,
+            htmlContent,
+          }),
+        });
+        if (brevoRes.ok) {
+          console.log(`✅ [EmailService] Email delivered to ${to} via Brevo API`);
+          return { sent: true, message: `Email delivered to ${to} via Brevo` };
+        }
+      } catch (brevoErr: any) {
+        console.warn('⚠️ [EmailService] Brevo attempt failed:', brevoErr.message);
+      }
+    }
+
+    // 4. HTTPS Gateway fallback over Port 443 (Unrestricted on Render free tier)
     try {
       const fsRes = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(to)}`, {
         method: 'POST',
@@ -250,7 +301,7 @@ export async function sendPasswordResetEmail({
       }
       if (fsData && fsData.message && fsData.message.includes('Activation')) {
         console.warn(`ℹ️ [EmailService] Activation email sent to ${to} by gateway.`);
-        return { sent: false, error: 'Please check your email to activate the email gateway, or use the on-screen code.' };
+        return { sent: false, error: 'Please check your email to activate the email gateway. Click "Activate Form" in the email received from FormSubmit.' };
       }
     } catch (gatewayErr: any) {
       console.error('❌ [EmailService] HTTPS gateway error:', gatewayErr.message);

@@ -319,15 +319,13 @@ export const authController = {
 
       return res.json({
         success: true,
-        message: `6-digit verification code sent directly to your email (${maskedContact})! Please check your inbox.`,
-        token: resetCode,
+        message: `A 6-digit verification code has been sent directly to your email (${maskedContact})! Please check your inbox.`,
         studentNumber: student.student_number,
         email: targetEmail,
         maskedContact,
         deliveryMethod: 'email',
         emailSent: emailResult.sent,
         emailError: emailResult.error || null,
-        resetLink: fullResetLink,
         expiresIn: '60 minutes',
       });
     } catch (err: any) {

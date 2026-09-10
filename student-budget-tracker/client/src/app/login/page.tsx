@@ -54,8 +54,6 @@ function LoginContent() {
   const [forgotId, setForgotId] = useState('');
   const [forgotResult, setForgotResult] = useState<{
     message?: string;
-    token?: string;
-    resetLink?: string;
     maskedContact?: string;
     studentNumber?: string;
   } | null>(null);
@@ -220,17 +218,13 @@ function LoginContent() {
         setSuccessMsg(res.message || '6-digit verification code sent directly to your email!');
         setForgotResult({
           message: res.message,
-          token: res.token,
-          resetLink: res.resetLink,
           maskedContact: res.maskedContact,
           studentNumber: res.studentNumber,
         });
         if (res.studentNumber) {
           setResetStudentNumber(res.studentNumber);
         }
-        if (res.token) {
-          setResetToken(res.token);
-        }
+        setResetToken('');
         setResendCooldown(30);
         // Seamlessly move to the verification screen
         setTab('reset');
@@ -843,14 +837,6 @@ function LoginContent() {
                   <p className="text-3xs text-slate-300">
                     A 6-digit verification code has been dispatched directly to your university email. Please check your inbox and spam folder.
                   </p>
-                  {forgotResult.token && (
-                    <div className="pt-2 border-t border-emerald-500/20 flex items-center justify-between text-3xs">
-                      <span className="text-slate-400">Email Verification Code:</span>
-                      <code className="font-mono font-bold text-emerald-400 tracking-widest bg-emerald-900/60 px-2 py-0.5 rounded border border-emerald-500/30">
-                        {forgotResult.token}
-                      </code>
-                    </div>
-                  )}
                 </div>
               )}
 

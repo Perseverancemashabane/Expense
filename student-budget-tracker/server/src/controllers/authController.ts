@@ -300,8 +300,8 @@ export const authController = {
         process.env.CLIENT_URL && !process.env.CLIENT_URL.includes('localhost')
           ? process.env.CLIENT_URL
           : (process.env.NODE_ENV === 'production'
-              ? 'https://expense-xi-two.vercel.app'
-              : (process.env.CLIENT_URL || 'https://expense-xi-two.vercel.app'));
+              ? 'https://expense-naledi3.vercel.app'
+              : (process.env.CLIENT_URL || 'https://expense-naledi3.vercel.app'));
 
       const fullResetLink = `${clientBase.replace(/\/$/, '')}/login?mode=reset&token=${resetCode}&student=${student.student_number}`;
 

@@ -17,8 +17,8 @@ export async function sendPasswordResetEmail({
   resetCode,
   resetLink,
 }: SendResetEmailParams): Promise<{ sent: boolean; message?: string; error?: string }> {
-  const smtpUser = process.env.SMTP_USER;
-  const smtpPass = process.env.SMTP_PASS;
+  const smtpUser = process.env.SMTP_USER || 'naledimashabane001@gmail.com';
+  const smtpPass = process.env.SMTP_PASS || 'saqs avgu cgpy ibvj';
   const smtpHost =
     process.env.SMTP_HOST ||
     (smtpUser && smtpUser.includes('@gmail.com') ? 'smtp.gmail.com' : undefined);
@@ -45,9 +45,9 @@ export async function sendPasswordResetEmail({
             user: smtpUser,
             pass: smtpPass,
           },
-          connectionTimeout: 6000,
-          greetingTimeout: 6000,
-          socketTimeout: 8000,
+          connectionTimeout: 15000,
+          greetingTimeout: 15000,
+          socketTimeout: 20000,
         }
       : {
           host: smtpHost,
@@ -57,9 +57,9 @@ export async function sendPasswordResetEmail({
             user: smtpUser,
             pass: smtpPass,
           },
-          connectionTimeout: 6000,
-          greetingTimeout: 6000,
-          socketTimeout: 8000,
+          connectionTimeout: 15000,
+          greetingTimeout: 15000,
+          socketTimeout: 20000,
         };
 
     const transporter = nodemailer.createTransport(transportOptions);

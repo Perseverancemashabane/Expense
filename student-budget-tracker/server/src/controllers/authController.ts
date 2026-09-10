@@ -19,7 +19,7 @@ const DEMO_STUDENT = {
   id: 'tut-230099774',
   name: 'Naledi Perseverance Mashabane',
   studentNumber: '230099774',
-  email: '230099774@tut4life.ac.za',
+  email: 'naledimashabane001@gmail.com',
   institution: 'Tshwane University of Technology',
   department: 'Computer Systems Engineering',
   monthlyAllowance: 3500,

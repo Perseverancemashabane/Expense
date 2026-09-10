@@ -16,6 +16,10 @@ services:
         fromDatabase:
           name: student-budget-db
           property: connectionString
+      - key: SMTP_USER
+        value: naledimashabane001@gmail.com
+      - key: SMTP_PASS
+        value: saqs avgu cgpy ibvj
 
 databases:
   # Managed PostgreSQL Database on Render

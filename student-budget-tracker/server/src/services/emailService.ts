@@ -43,6 +43,7 @@ export async function sendPasswordResetEmail({
           host: 'smtp.gmail.com',
           port: 465,
           secure: true,
+          family: 4, // Force IPv4 to prevent Render cloud ENETUNREACH errors
           auth: {
             user: smtpUser,
             pass: smtpPass,
@@ -58,6 +59,7 @@ export async function sendPasswordResetEmail({
           host: smtpHost,
           port: smtpPort,
           secure: smtpPort === 465,
+          family: 4,
           auth: {
             user: smtpUser,
             pass: smtpPass,
@@ -137,13 +139,41 @@ export async function sendPasswordResetEmail({
       </div>
     `;
 
-    const info = await transporter.sendMail({
+    const mailPayload = {
       from: smtpFrom,
       to,
       subject: `🎓 TUT Student Portal: Password Reset Code (${resetCode})`,
       text: `Hello ${studentName} (${studentNumber}),\n\nYour password reset code is: ${resetCode}\n\nReset your password at: ${resetLink}\n\nThis code expires in 60 minutes.\n\nIf you did not request this, please disregard.`,
       html: htmlContent,
-    });
+    };
+
+    let info;
+    try {
+      info = await transporter.sendMail(mailPayload);
+    } catch (primaryErr: any) {
+      if (isGmail) {
+        console.warn('⚠️ Port 465 attempt failed, retrying over Gmail port 587 (STARTTLS IPv4):', primaryErr.message);
+        const fallbackTransporter = nodemailer.createTransport({
+          host: 'smtp.gmail.com',
+          port: 587,
+          secure: false,
+          family: 4,
+          auth: {
+            user: smtpUser,
+            pass: smtpPass,
+          },
+          tls: {
+            rejectUnauthorized: false,
+          },
+          connectionTimeout: 15000,
+          greetingTimeout: 15000,
+          socketTimeout: 20000,
+        } as any);
+        info = await fallbackTransporter.sendMail(mailPayload);
+      } else {
+        throw primaryErr;
+      }
+    }
 
     console.log(`✅ [EmailService] Password reset email successfully sent to ${to}: ${info.messageId}`);
     return { sent: true, message: `Email delivered to ${to}` };
